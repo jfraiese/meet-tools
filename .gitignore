@@ -1,0 +1,13 @@
+.DS_Store
+node_modules/
+*.log
+
+# Recordings and transcripts never belong in the repo. The tools write them
+# beside the source file, which is usually ~/Downloads/meet-recordings, but a
+# stray test run in the checkout should not be committable either.
+*.webm
+*.m4a
+*.mp3
+*.wav
+*.srt
+*.speakers.json

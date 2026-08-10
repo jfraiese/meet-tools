@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "Meet Recorder",
+  "version": "0.1.0",
+  "description": "Records the audio of a Google Meet call — both what you hear and what you say — to a local file.",
+  "minimum_chrome_version": "116",
+  "permissions": ["tabCapture", "offscreen", "downloads", "storage", "activeTab"],
+  "host_permissions": ["https://meet.google.com/*"],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "action": { "default_popup": "popup.html", "default_title": "Meet Recorder" },
+  "content_scripts": [
+    {
+      "matches": ["https://meet.google.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    { "resources": ["lib/*.js"], "matches": ["https://meet.google.com/*"] }
+  ],
+  "commands": {
+    "toggle-recording": {
+      "suggested_key": { "default": "Ctrl+Shift+U", "mac": "Command+Shift+U" },
+      "description": "Start or stop recording this Meet"
+    }
+  }
+}

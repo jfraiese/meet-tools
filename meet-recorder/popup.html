@@ -1,0 +1,28 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Meet Recorder</title>
+<style>
+  body { font: 14px/1.5 system-ui, sans-serif; width: 18rem; margin: 0; padding: .9rem; }
+  h1 { font-size: .8rem; letter-spacing: .06em; text-transform: uppercase; color: #5f6368; margin: 0 0 .6rem; }
+  #state { font-weight: 600; margin-bottom: .5rem; }
+  .sources { display: flex; gap: 1rem; font-size: .82rem; color: #5f6368; margin-bottom: .8rem; }
+  .silent { color: #c5221f; font-weight: 600; }
+  button { font: inherit; width: 100%; padding: .45rem; border-radius: .4rem; border: 1px solid #dadce0; background: #fff; cursor: pointer; }
+  button:disabled { opacity: .45; cursor: default; }
+  hr { border: 0; border-top: 1px solid #e0e0e0; margin: .9rem 0; }
+  #recovery-note { font-size: .82rem; color: #5f6368; margin-bottom: .5rem; }
+  #discard { margin-top: .4rem; border-color: transparent; color: #5f6368; }
+</style>
+<h1>Meet Recorder</h1>
+<div id="state">Loading…</div>
+<div class="sources" id="sources" hidden>
+  <span id="mic">You: —</span><span id="tab">Them: —</span>
+</div>
+<button id="toggle" disabled>—</button>
+<div id="recovery" hidden>
+  <hr>
+  <div id="recovery-note"></div>
+  <button id="recover">Recover last recording</button>
+  <button id="discard">Discard it</button>
+</div>
+<script type="module" src="popup.js"></script>

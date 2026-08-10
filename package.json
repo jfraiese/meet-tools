@@ -1,0 +1,14 @@
+{
+  "name": "meet-tools",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Record a Google Meet call and transcribe it with Whisper, entirely on your own Mac",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.11"
+  },
+  "scripts": {
+    "test": "node --test \"meet-recorder/test/*.test.js\" \"meet-transcribe/test/*.test.js\""
+  }
+}
