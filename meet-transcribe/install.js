@@ -15,7 +15,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-import { buildInfoPlist, buildDocumentWflow, buildCommand, SERVICE_NAME } from './lib/workflow.js';
+import { buildInfoPlist, buildDocumentWflow, buildCommand, stableNodePath, SERVICE_NAME } from './lib/workflow.js';
 
 const SERVICES_DIR = path.join(os.homedir(), 'Library', 'Services');
 const BUNDLE = path.join(SERVICES_DIR, `${SERVICE_NAME}.workflow`);
@@ -35,7 +35,8 @@ function refreshServices() {
 }
 
 function install({ language }) {
-  const command = buildCommand({ node: process.execPath, script, language });
+  const node = stableNodePath({ execPath: process.execPath, realpath: fs.realpathSync });
+  const command = buildCommand({ node, script, language });
   const contents = path.join(BUNDLE, 'Contents');
   fs.mkdirSync(contents, { recursive: true });
   fs.writeFileSync(path.join(contents, 'Info.plist'), buildInfoPlist({}));

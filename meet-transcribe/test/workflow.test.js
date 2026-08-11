@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 
-const { buildInfoPlist, buildDocumentWflow, buildCommand, escapeXml, SERVICE_NAME } =
+const { buildInfoPlist, buildDocumentWflow, buildCommand, escapeXml, stableNodePath, SERVICE_NAME } =
   await import('../lib/workflow.js');
 
 const lint = (contents, name) => {
@@ -87,6 +87,42 @@ test('a path with XML-hostile characters cannot break the plist', () => {
   lint(wflow, 'document.wflow');
   assert.match(wflow, /a &amp; b/);
   assert.match(wflow, /&lt;x&gt;/);
+});
+
+test('the baked-in node is the symlink that survives a brew upgrade', () => {
+  // process.execPath is fully resolved: running Homebrew's bin/node reports
+  // Cellar/node/<version>/bin/node, and `brew upgrade node` deletes that
+  // directory — the action then dies with "command not found" until the
+  // installer is re-run. The bin/node symlink is what survives the upgrade.
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'stable-node-'));
+  fs.mkdirSync(path.join(tmp, 'cellar'));
+  fs.mkdirSync(path.join(tmp, 'bin'));
+  fs.writeFileSync(path.join(tmp, 'cellar', 'node'), '');
+  fs.symlinkSync(path.join(tmp, 'cellar', 'node'), path.join(tmp, 'bin', 'node'));
+
+  const node = stableNodePath({
+    execPath: path.join(tmp, 'cellar', 'node'),
+    dirs: [path.join(tmp, 'bin')],
+    realpath: fs.realpathSync,
+  });
+  assert.equal(node, path.join(tmp, 'bin', 'node'));
+});
+
+test('a foreign or absent node keeps the binary that ran the installer', () => {
+  // A prefix with no node must not be chosen, and neither may a node that is a
+  // different binary — swapping interpreters behind the user's back is worse
+  // than a path that goes stale.
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'stable-node-'));
+  fs.mkdirSync(path.join(tmp, 'empty'));
+  fs.mkdirSync(path.join(tmp, 'other'));
+  fs.writeFileSync(path.join(tmp, 'other', 'node'), '');
+  fs.writeFileSync(path.join(tmp, 'mine'), '');
+
+  const execPath = path.join(tmp, 'mine');
+  const absent = stableNodePath({ execPath, dirs: [path.join(tmp, 'empty')], realpath: fs.realpathSync });
+  assert.equal(absent, execPath);
+  const foreign = stableNodePath({ execPath, dirs: [path.join(tmp, 'other')], realpath: fs.realpathSync });
+  assert.equal(foreign, execPath);
 });
 
 test('escapeXml handles the five characters that matter', () => {

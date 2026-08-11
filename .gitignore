@@ -2,6 +2,10 @@
 node_modules/
 *.log
 
+# Per-machine agent settings. Ignored here and not just in a global ignore,
+# so a checkout on a machine without that global rule stays safe too.
+.claude/settings.local.json
+
 # Recordings and transcripts never belong in the repo. The tools write them
 # beside the source file, which is usually ~/Downloads/meet-recordings, but a
 # stray test run in the checkout should not be committable either.

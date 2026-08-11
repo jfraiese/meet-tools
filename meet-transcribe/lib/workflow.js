@@ -22,6 +22,38 @@ const BUNDLE_ID = 'dev.relay.meet-transcribe';
 // lib/runtime.js already searches for the model.
 export const TOOL_DIRS = ['/opt/homebrew/bin', '/usr/local/bin', '$HOME/.local/bin'];
 
+// Where a node symlink that outlives upgrades would be. Only the Homebrew
+// prefixes: pipx's dir never holds node, and $HOME/.local/bin above is a shell
+// literal, not a path this process could stat.
+export const NODE_DIRS = ['/opt/homebrew/bin', '/usr/local/bin'];
+
+/**
+ * The node path to bake into the action. process.execPath is fully resolved —
+ * running Homebrew's bin/node reports Cellar/node/<version>/bin/node, and
+ * `brew upgrade node` deletes that directory, breaking the action until the
+ * installer is re-run (the same Cellar hazard lib/runtime.js documents for
+ * models). So prefer a stable symlink, but only one that resolves to the very
+ * binary running the installer: anything else would swap interpreters behind
+ * the user's back, and execPath — stale-prone but correct — is the fallback.
+ */
+export function stableNodePath({ execPath, dirs = NODE_DIRS, realpath }) {
+  let target;
+  try {
+    target = realpath(execPath);
+  } catch {
+    return execPath;
+  }
+  for (const dir of dirs) {
+    const candidate = `${dir}/node`;
+    try {
+      if (realpath(candidate) === target) return candidate;
+    } catch {
+      // No node in this prefix.
+    }
+  }
+  return execPath;
+}
+
 /**
  * The shell body the action runs. `$PATH` is kept on the end so anything
  * launchd does provide still resolves, and the two paths are quoted because a
