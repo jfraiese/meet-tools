@@ -130,10 +130,10 @@ test('names map in order of first appearance, not label order', () => {
     { start: 0, end: 1, text: 'a', speaker: 'SPEAKER_02' },
     { start: 1, end: 2, text: 'b', speaker: 'SPEAKER_00' },
   ];
-  const { labelled: named, mapping } = applyNames(labelled, ['Julián', 'Isma']);
-  assert.equal(named[0].speaker, 'Julián');
-  assert.equal(named[1].speaker, 'Isma');
-  assert.deepEqual(mapping, { SPEAKER_02: 'Julián', SPEAKER_00: 'Isma' });
+  const { labelled: named, mapping } = applyNames(labelled, ['Ada', 'Bo']);
+  assert.equal(named[0].speaker, 'Ada');
+  assert.equal(named[1].speaker, 'Bo');
+  assert.deepEqual(mapping, { SPEAKER_02: 'Ada', SPEAKER_00: 'Bo' });
 });
 
 test('too few names leaves the rest numbered; too many are reported', () => {
@@ -147,13 +147,13 @@ test('too few names leaves the rest numbered; too many are reported', () => {
 
 test('the text output prefixes each line with its speaker', () => {
   const out = formatText([
-    { start: 0, end: 1, text: 'hola', speaker: 'Isma' },
+    { start: 0, end: 1, text: 'hola', speaker: 'Ada' },
     { start: 1, end: 2, text: 'qué tal', speaker: null },
   ]);
-  assert.equal(out, 'Isma: hola\nqué tal\n');
+  assert.equal(out, 'Ada: hola\nqué tal\n');
 });
 
 test('the srt keeps valid cue timing with the speaker in the text', () => {
-  const srt = formatSrt([{ start: 0, end: 1.5, text: 'hola', speaker: 'Isma' }]);
-  assert.match(srt, /^1\n00:00:00,000 --> 00:00:01,500\nIsma: hola\n/);
+  const srt = formatSrt([{ start: 0, end: 1.5, text: 'hola', speaker: 'Ada' }]);
+  assert.match(srt, /^1\n00:00:00,000 --> 00:00:01,500\nAda: hola\n/);
 });
