@@ -337,9 +337,13 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       if (rec.state === RECORDING && (await chrome.offscreen.hasDocument())) {
         await sendToOffscreen(
           {
+            // Passed through as-is, including null. Only `true` gates the
+            // audio, but "could not tell" has to survive the trip so the popup
+            // can say so — collapsing it to false here made a detector that
+            // matched nothing look exactly like a microphone that was live.
             target: 'offscreen',
             type: 'mic-state',
-            muted: msg.muted === true,
+            muted: msg.muted,
             participants: msg.participants,
           },
           1,

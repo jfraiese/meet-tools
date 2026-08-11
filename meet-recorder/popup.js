@@ -137,8 +137,15 @@ if (!micGranted) {
     }
     stateEl.textContent = 'Recording';
     panel.dataset.state = 'recording';
-    micLabel.textContent = levels.muted ? 'You · muted' : 'You';
-    micLabel.classList.toggle('muted', Boolean(levels.muted));
+    // Three states, not two. "Could not tell" has to look different from "live"
+    // or a detector that matches nothing is indistinguishable from a working
+    // microphone — which is exactly how this shipped broken.
+    micLabel.textContent =
+      levels.muted === true ? 'You · muted' : levels.muted === null ? 'You · mute?' : 'You';
+    micLabel.classList.toggle('muted', levels.muted === true);
+    micLabel.classList.toggle('unknown', levels.muted === null);
+    micLabel.title =
+      levels.muted === null ? 'Could not read Meet’s mic button — your side is still recording' : '';
 
     if (levels.participants) {
       subjectEl.textContent = `${name} · ${levels.participants} on the call`;
@@ -147,7 +154,7 @@ if (!micGranted) {
     // Said rather than implied. An empty meter on both sides is worth
     // interrupting someone about — but not when they muted themselves and
     // nobody happens to be talking, which is an ordinary moment in a meeting.
-    const silent = mic === 0 && tabLevel === 0 && !levels.muted;
+    const silent = mic === 0 && tabLevel === 0 && levels.muted !== true;
     quietEl.hidden = !silent;
     quietEl.textContent = silent ? 'No sound on either side right now.' : '';
   };

@@ -10,6 +10,8 @@ const {
   detectInCall,
   detectMuted,
   countParticipants,
+  MIC_MUTED_SELECTORS,
+  MIC_LIVE_SELECTORS,
   IN_CALL_SELECTORS,
   CALL_ENDED_SELECTORS,
 } = await import('../lib/meet.js');
@@ -69,8 +71,8 @@ test('mute is three-valued, and unknown means keep recording', () => {
     muted: true,
     matchedBy: '[data-is-muted="true"]',
   });
-  assert.equal(detectMuted(root('button[aria-label^="Turn on microphone"]')).muted, true);
-  assert.equal(detectMuted(root('button[aria-label^="Turn off microphone"]')).muted, false);
+  assert.equal(detectMuted(root('[aria-label^="Turn on microphone"]')).muted, true);
+  assert.equal(detectMuted(root('[aria-label^="Turn off microphone"]')).muted, false);
   assert.equal(detectMuted(root('[data-is-muted="false"]')).muted, false);
   assert.deepEqual(detectMuted({ querySelector: () => null }), { muted: null, matchedBy: null });
 });
@@ -79,10 +81,32 @@ test('"turn on microphone" means muted, which is the easy one to invert', () => 
   // The label describes what the button will do, not what the mic is doing.
   // Reading it the other way round records exactly the wrong half of a call.
   const offered = (label) => ({
-    querySelector: (s) => (s === `button[aria-label^="${label}"]` ? {} : null),
+    querySelector: (s) => (s === `[aria-label^="${label}"]` ? {} : null),
   });
   assert.equal(detectMuted(offered('Turn on microphone')).muted, true, 'offered ON => it is off');
   assert.equal(detectMuted(offered('Turn off microphone')).muted, false, 'offered OFF => it is on');
+});
+
+test('the selectors carry no tag qualifier, which matched nothing on real Meet', () => {
+  // These were `button[aria-label^=...]` and matched nothing: Meet's controls
+  // are not always <button>. Requiring a tag is a way to be wrong while looking
+  // right, so the shape is pinned here rather than left to a future edit.
+  for (const sel of [...MIC_MUTED_SELECTORS, ...MIC_LIVE_SELECTORS]) {
+    assert.ok(
+      sel.startsWith('[') ,
+      `${sel} qualifies an element type; aria-label and data attributes should stand alone`,
+    );
+  }
+});
+
+test('unmute labels are tested before mute labels, so "Unmute" cannot read as "Mute"', () => {
+  // Starts-with keeps these apart on its own, but the order is what guarantees
+  // it if either list grows a looser entry.
+  const root = (sel) => ({ querySelector: (s) => (s === sel ? {} : null) });
+  assert.equal(detectMuted(root('[aria-label^="Unmute"]')).muted, true);
+  assert.equal(detectMuted(root('[aria-label^="Mute"]')).muted, false);
+  assert.equal(detectMuted(root('[aria-label^="Quitar silencio"]')).muted, true);
+  assert.equal(detectMuted(root('[aria-label^="Silenciar"]')).muted, false);
 });
 
 test('a malformed selector cannot take the mute probe down', () => {

@@ -201,4 +201,12 @@
   });
   report();
   reportMic();
+
+  // Polled as well as observed. Mute is a state we must not miss, and a
+  // MutationObserver only fires on the mutations it was asked for — if Meet
+  // toggles a class or swaps an icon rather than changing an attribute we
+  // filter on, the observer stays silent and the recording keeps your side
+  // running. Two querySelectors every two seconds is not a cost worth
+  // optimising against that.
+  setInterval(reportMic, 2000);
 })();

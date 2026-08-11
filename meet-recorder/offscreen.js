@@ -378,8 +378,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   // would need the whole graph rebuilt mid-recording.
   if (msg.type === 'mic-state') {
     if (session) {
-      session.muted = msg.muted;
-      session.micGain.gain.value = msg.muted ? 0 : 1;
+      session.muted = msg.muted; // true | false | null ("could not tell")
+      // Only an actual `true` closes the gate. Unknown keeps your side
+      // recording, on purpose.
+      session.micGain.gain.value = msg.muted === true ? 0 : 1;
       // The highest count seen: people arrive late, and the number that helps
       // when transcribing is how many were ever in the room.
       if (msg.participants > (session.participants ?? 0)) session.participants = msg.participants;

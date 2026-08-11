@@ -62,16 +62,26 @@ export const IN_CALL_SELECTORS = [
  * Ordered by confidence, same as call detection: the attribute is structural
  * and survives translation, the labels are the readable fallback.
  */
+// No tag qualifier: Meet's controls are not always <button>, and requiring one
+// is a way to match nothing while looking correct. `aria-label` carries a
+// keyboard hint on some builds — "Turn on microphone (⌘ + d)" — so these match
+// on the prefix rather than the whole string.
 export const MIC_MUTED_SELECTORS = [
   '[data-is-muted="true"]',
-  'button[aria-label^="Turn on microphone"]',
-  'button[aria-label^="Activar micrófono"]',
+  '[aria-label^="Turn on microphone"]',
+  '[aria-label^="Unmute"]',
+  '[aria-label^="Activar micrófono"]',
+  '[aria-label^="Activar el micrófono"]',
+  '[aria-label^="Quitar silencio"]',
 ];
 
 export const MIC_LIVE_SELECTORS = [
   '[data-is-muted="false"]',
-  'button[aria-label^="Turn off microphone"]',
-  'button[aria-label^="Desactivar micrófono"]',
+  '[aria-label^="Turn off microphone"]',
+  '[aria-label^="Mute"]',
+  '[aria-label^="Desactivar micrófono"]',
+  '[aria-label^="Desactivar el micrófono"]',
+  '[aria-label^="Silenciar"]',
 ];
 
 /**
