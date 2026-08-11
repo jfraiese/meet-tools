@@ -205,6 +205,11 @@
     if (msg?.type !== 'recording-state') return;
     if (msg.state === 'recording') {
       showBanner('recording', msg.note || 'Recording this meeting', 'stop', 'Stop & save');
+      // Re-report even if nothing changed. Until a recording exists there is
+      // nothing downstream to tell, so the reading taken while idle went
+      // nowhere — this is the moment it becomes worth sending.
+      lastMic = null;
+      reportMic();
     } else if (msg.state === 'warn') {
       showBanner('warn', msg.note || 'Check the recording', 'stop', 'Stop & save');
     } else if (msg.state === 'saved') {

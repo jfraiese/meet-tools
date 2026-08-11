@@ -186,6 +186,14 @@ Run against a real two-participant call after any change to `content.js`,
       normal, which is how they all shipped inert once.
 - [ ] Muting yourself in Meet empties the **You** meter and labels it muted,
       and unmuting brings it back — without restarting the recording.
+- [ ] **Mute first, then start recording.** The meter must start empty. State
+      that never changes after the recording begins is state nothing sends, and
+      this began recording muted people because of it.
+- [ ] Camera off with the microphone live: the **You** meter keeps moving. Both
+      controls carry `data-is-muted`, so this is where the camera gets mistaken
+      for the microphone.
+- [ ] The sidecar carries a `participants` number, not `null`, on a call that
+      began before you pressed record.
 - [ ] Say something while muted, then check the transcript does not contain it.
 - [ ] The sidecar's `participants` matches the number of people actually there.
 - [ ] `killall -9 "Google Chrome"` mid-recording, then reopening, offers

@@ -134,7 +134,9 @@ async function start({ streamId, meta }) {
   // the recording keeps your microphone whatever Meet is showing, because
   // getUserMedia is a separate capture that Meet cannot reach — so a muttered
   // aside nobody in the meeting heard would land in the file and the transcript.
-  const micGain = new GainNode(ctx, { gain: 1 });
+  // Opens or closes according to what the page said before this started, not
+  // after. A recording begun while already muted has no change to wait for.
+  const micGain = new GainNode(ctx, { gain: meta.muted === true ? 0 : 1 });
 
   tabSource.connect(mix);
   micSource.connect(micGain);
@@ -188,7 +190,7 @@ async function start({ streamId, meta }) {
     micGain,
     startedAt: new Date(meta.startedAt),
     stopReason: 'manual',
-    muted: false,
+    muted: meta.muted ?? null,
     participants: meta.participants ?? null,
     sampler: null,
   };

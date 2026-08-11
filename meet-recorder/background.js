@@ -202,12 +202,27 @@ async function startCapture(rec) {
     return;
   }
 
+  // Seed the recording with what the page last said about the microphone.
+  //
+  // Without this, a recording that begins while you are already muted records
+  // you anyway: the content script only reports mic state when it *changes*,
+  // and the worker only forwards it while recording — so the reading taken
+  // before you pressed record was dropped, and nothing changed afterwards to
+  // trigger another. Same reason the participant count arrived as null.
+  const { mic } = await chrome.storage.session.get('mic');
+
   await ensureOffscreen();
   const delivered = await sendToOffscreen({
     target: 'offscreen',
     type: 'start',
     streamId,
-    meta: { callCode: rec.callCode, tabTitle: tab.title ?? '', startedAt: Date.now() },
+    meta: {
+      callCode: rec.callCode,
+      tabTitle: tab.title ?? '',
+      startedAt: Date.now(),
+      muted: mic?.muted ?? null,
+      participants: mic?.participants ?? null,
+    },
   });
 
   if (!delivered) {
