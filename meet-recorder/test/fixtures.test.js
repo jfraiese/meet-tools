@@ -14,7 +14,8 @@ import path from 'node:path';
 const fixturePath = path.join(import.meta.dirname, 'fixtures', 'meet-dom.json');
 const fixture = JSON.parse(fs.readFileSync(fixturePath, 'utf8'));
 
-const { detectInCall, CALL_ENDED_SELECTORS, IN_CALL_SELECTORS } = await import('../lib/meet.js');
+const { detectInCall, CALL_ENDED_SELECTORS, IN_CALL_SELECTORS, MIC_MUTED_SELECTORS, MIC_LIVE_SELECTORS } =
+  await import('../lib/meet.js');
 
 /**
  * The smallest thing detectInCall accepts: something with querySelector. Backed
@@ -95,4 +96,71 @@ test('detection still covers a non-English Meet', () => {
     IN_CALL_SELECTORS.some((s) => !/aria-label/.test(s)),
     'at least one selector must be structural, not label-based',
   );
+});
+
+// Mute, against the two states captured from a real call. The mic button's
+// label says what pressing it will do, so these two are the whole signal and
+// one of them alone cannot tell them apart.
+test('mute is read correctly in both real captured states', async () => {
+  const { detectMuted } = await import('../lib/meet.js');
+
+  // A page stand-in: matches a selector when any captured label or attribute
+  // satisfies it. Crude, but it is the shape of the real markup that matters.
+  const pageFrom = (state) => ({
+    querySelector(selector) {
+      const attrMatch = /\[data-is-muted="(true|false)"\]\[aria-label\*="([^"]+)" i\]/.exec(selector);
+      if (attrMatch) {
+        const [, wanted, word] = attrMatch;
+        const hasAttr = state.mutedAttrs.includes(`data-is-muted=${wanted}`);
+        const hasLabel = state.ariaLabels.some((l) => l.toLowerCase().includes(word.toLowerCase()));
+        // The attribute and the label must be on the same control. In the real
+        // page the microphone toggle carries both; the camera carries only the
+        // attribute, which is the whole reason for the pairing.
+        return hasAttr && hasLabel && wanted === (state.micMuted ? 'true' : 'false') ? {} : null;
+      }
+      const prefix = /\[aria-label\^="([^"]+)"\]/.exec(selector);
+      if (prefix) {
+        return state.ariaLabels.some((l) => l.startsWith(prefix[1])) ? {} : null;
+      }
+      return null;
+    },
+  });
+
+  const live = { ...fixture['mic-live'], micMuted: false };
+  const muted = { ...fixture['mic-muted'], micMuted: true };
+
+  assert.equal(detectMuted(pageFrom(live)).muted, false, 'microphone on reads as live');
+  assert.equal(detectMuted(pageFrom(muted)).muted, true, 'microphone off reads as muted');
+});
+
+test('another participant’s mute control is never mistaken for your own', () => {
+  // "Mute <participant>'s microphone" is a real label on any call with someone
+  // else in it. A selector on [aria-label^="Mute"] matched it, which made every
+  // multi-person call read as live no matter what your microphone was doing.
+  const others = fixture['mic-muted'].ariaLabels.filter((l) => l.includes('<participant>'));
+  assert.ok(others.length > 0, 'the capture should contain other people’s controls');
+
+  for (const selector of [...MIC_MUTED_SELECTORS, ...MIC_LIVE_SELECTORS]) {
+    const prefix = /\[aria-label\^="([^"]+)"\]/.exec(selector);
+    if (!prefix) continue;
+    for (const label of others) {
+      assert.ok(
+        !label.startsWith(prefix[1]),
+        `${selector} matches another participant's control: "${label}"`,
+      );
+    }
+  }
+});
+
+test('the camera cannot be read as the microphone', () => {
+  // Camera off with the microphone live puts data-is-muted="true" on the page
+  // while your microphone is fine. Unscoped, that silently dropped your side.
+  for (const selector of [...MIC_MUTED_SELECTORS, ...MIC_LIVE_SELECTORS]) {
+    if (!selector.includes('data-is-muted')) continue;
+    assert.match(
+      selector,
+      /aria-label\*=/,
+      `${selector} trusts data-is-muted without checking the control is the microphone`,
+    );
+  }
 });

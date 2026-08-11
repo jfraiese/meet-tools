@@ -63,7 +63,21 @@ and shows what is being recorded rather than what the microphone can hear.
 Detection reads Meet's own mic button and is three-valued, like call detection.
 If the markup changes and nothing is recognised, **your side keeps recording** —
 a meeting you can only half hear cannot be repaired afterwards, and a muttered
-aside can.
+aside can. The popup says `You · mute?` when that happens, rather than showing
+the same thing it shows for a live microphone.
+
+Two details from a real call decide how this reads the page, and both are
+pinned by fixtures:
+
+- **`data-is-muted` is on more than one control.** Camera on with the
+  microphone muted puts `true` and `false` on the page at the same time, the
+  `false` being the camera. Trusting the attribute alone reads "camera off" as
+  "microphone muted" — which would drop your side of a recording because you
+  turned your camera off.
+- **You can mute other people**, and those controls are labelled
+  "Mute &lt;name&gt;'s microphone". Matching on a `Mute` prefix catches them, so
+  any call with someone else in it reads as live whatever your microphone is
+  doing.
 
 ### Checking it is working
 
@@ -116,11 +130,12 @@ source "worked", and could not tell a broken microphone from someone letting a
 colleague finish.
 
 **`participants`** is the most people seen at once, counted from participant
-tiles. It exists to save you typing: `meet-transcribe` has to be told how many
-people spoke before it can label them. It is a count of *visible tiles*, not a
-roll call — Meet stops rendering one per person in large calls, and someone who
-never speaks or turns on a camera may not get one. `null` means the page did not
-say. Check it before passing it to `--speakers`.
+tiles, and it **includes you** — a real three-person call reads `3`. It exists
+to save you typing: `meet-transcribe` has to be told how many people spoke
+before it can label them. It is a count of *visible tiles*, not a roll call —
+Meet stops rendering one per person in large calls, and someone who never
+speaks or turns on a camera may not get one. `null` means the page did not say.
+Check it before passing it to `--speakers`.
 
 Then, when you want the text, right-click the `.webm` in Finder →
 **Quick Actions → Transcribe with Whisper**. See

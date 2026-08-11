@@ -140,6 +140,44 @@
       "data-hc-mark-fully-rendered=\"true\"",
       "data-mdc-dom-announce=\"true\""
     ],
-    "ariaLabels": ["Returning to home screen"]
+    "ariaLabels": [
+      "Returning to home screen"
+    ]
+  },
+  "mic-live": {
+    "_note": "Captured from a real 3-person call, microphone on, camera on. Names redacted.",
+    "ariaLabels": [
+      "Mute <participant>'s microphone",
+      "Mute <participant>'s microphone",
+      "Turn off microphone",
+      "Turn off camera"
+    ],
+    "mutedAttrs": [
+      "data-is-muted=false",
+      "data-is-muted=false"
+    ],
+    "tiles": {
+      "moreOptions": 3,
+      "moreOptionsAny": 4,
+      "videos": 2
+    }
+  },
+  "mic-muted": {
+    "_note": "Same call, microphone muted, camera still on. Note both data-is-muted values are present at once: the false one is the camera.",
+    "ariaLabels": [
+      "Mute <participant>'s microphone",
+      "Mute <participant>'s microphone",
+      "Turn on microphone",
+      "Turn off camera"
+    ],
+    "mutedAttrs": [
+      "data-is-muted=true",
+      "data-is-muted=false"
+    ],
+    "tiles": {
+      "moreOptions": 3,
+      "moreOptionsAny": 4,
+      "videos": 2
+    }
   }
 }

@@ -67,13 +67,10 @@ test('mute is three-valued, and unknown means keep recording', () => {
   // page must not silently drop your side: a half-audible meeting cannot be
   // fixed afterwards, a muttered aside can.
   const root = (sel) => ({ querySelector: (s) => (s === sel ? {} : null) });
-  assert.deepEqual(detectMuted(root('[data-is-muted="true"]')), {
-    muted: true,
-    matchedBy: '[data-is-muted="true"]',
-  });
+  assert.equal(detectMuted(root(MIC_MUTED_SELECTORS[0])).muted, true);
+  assert.equal(detectMuted(root(MIC_LIVE_SELECTORS[0])).muted, false);
   assert.equal(detectMuted(root('[aria-label^="Turn on microphone"]')).muted, true);
   assert.equal(detectMuted(root('[aria-label^="Turn off microphone"]')).muted, false);
-  assert.equal(detectMuted(root('[data-is-muted="false"]')).muted, false);
   assert.deepEqual(detectMuted({ querySelector: () => null }), { muted: null, matchedBy: null });
 });
 
@@ -99,14 +96,28 @@ test('the selectors carry no tag qualifier, which matched nothing on real Meet',
   }
 });
 
-test('unmute labels are tested before mute labels, so "Unmute" cannot read as "Mute"', () => {
-  // Starts-with keeps these apart on its own, but the order is what guarantees
-  // it if either list grows a looser entry.
-  const root = (sel) => ({ querySelector: (s) => (s === sel ? {} : null) });
-  assert.equal(detectMuted(root('[aria-label^="Unmute"]')).muted, true);
-  assert.equal(detectMuted(root('[aria-label^="Mute"]')).muted, false);
-  assert.equal(detectMuted(root('[aria-label^="Quitar silencio"]')).muted, true);
-  assert.equal(detectMuted(root('[aria-label^="Silenciar"]')).muted, false);
+test('no selector matches on a bare Mute/Unmute prefix', () => {
+  // Those were tried and withdrawn. Meet labels the control for muting someone
+  // *else* "Mute <name>'s microphone", so a Mute prefix makes any call with a
+  // second person in it read as live whatever your own microphone is doing.
+  for (const sel of [...MIC_MUTED_SELECTORS, ...MIC_LIVE_SELECTORS]) {
+    assert.ok(
+      !/\[aria-label\^="(Un)?mute/i.test(sel),
+      `${sel} would also match another participant's mute control`,
+    );
+  }
+});
+
+test('the microphone is identified before data-is-muted is believed', () => {
+  // The camera carries the same attribute. Camera off, microphone live puts
+  // data-is-muted="true" on the page while your side is perfectly fine.
+  const attrSelectors = [...MIC_MUTED_SELECTORS, ...MIC_LIVE_SELECTORS].filter((s) =>
+    s.includes('data-is-muted'),
+  );
+  assert.ok(attrSelectors.length > 0);
+  for (const sel of attrSelectors) {
+    assert.match(sel, /aria-label\*="(microphone|micrófono)" i/);
+  }
 });
 
 test('a malformed selector cannot take the mute probe down', () => {

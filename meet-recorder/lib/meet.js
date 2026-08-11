@@ -62,26 +62,38 @@ export const IN_CALL_SELECTORS = [
  * Ordered by confidence, same as call detection: the attribute is structural
  * and survives translation, the labels are the readable fallback.
  */
+// Two things captured from a real call shape these, and both were nearly
+// expensive:
+//
+//  1. `data-is-muted` is on more than one control. In a call with the camera on
+//     and the microphone muted, the page carries `data-is-muted="true"` *and*
+//     `data-is-muted="false"` at once — the second is the camera. A bare
+//     `[data-is-muted="true"]` therefore reads "camera off" as "microphone
+//     muted", and would silently drop your side of a recording because you
+//     turned your camera off. So the attribute is only trusted on an element
+//     that also says it is the microphone.
+//
+//  2. You can mute *other people* in Meet, and those controls are labelled
+//     "Mute <name>'s microphone". A selector on `[aria-label^="Mute"]` matches
+//     them, so a page with anyone else on it would always look live. Only the
+//     labels Meet uses for your own toggle are listed.
+//
 // No tag qualifier: Meet's controls are not always <button>, and requiring one
-// is a way to match nothing while looking correct. `aria-label` carries a
-// keyboard hint on some builds — "Turn on microphone (⌘ + d)" — so these match
-// on the prefix rather than the whole string.
+// is a way to match nothing while looking correct.
 export const MIC_MUTED_SELECTORS = [
-  '[data-is-muted="true"]',
+  '[data-is-muted="true"][aria-label*="microphone" i]',
+  '[data-is-muted="true"][aria-label*="micrófono" i]',
   '[aria-label^="Turn on microphone"]',
-  '[aria-label^="Unmute"]',
   '[aria-label^="Activar micrófono"]',
   '[aria-label^="Activar el micrófono"]',
-  '[aria-label^="Quitar silencio"]',
 ];
 
 export const MIC_LIVE_SELECTORS = [
-  '[data-is-muted="false"]',
+  '[data-is-muted="false"][aria-label*="microphone" i]',
+  '[data-is-muted="false"][aria-label*="micrófono" i]',
   '[aria-label^="Turn off microphone"]',
-  '[aria-label^="Mute"]',
   '[aria-label^="Desactivar micrófono"]',
   '[aria-label^="Desactivar el micrófono"]',
-  '[aria-label^="Silenciar"]',
 ];
 
 /**
