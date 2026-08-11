@@ -284,5 +284,5 @@ writes files next to your recording and stops there.
 
 ## What it downloads
 
-See [`../README.md`](../README.md) for the licences of the models and binaries
-this fetches.
+See [`../THIRD-PARTY.md`](../THIRD-PARTY.md) for the licences of the models and
+binaries this fetches — one of them requires attribution.

@@ -78,27 +78,14 @@ Then: join a Meet, press ⌘⇧U, and right-click the file it leaves in
 
 Each tool's README covers its own details, failure modes and measured numbers.
 
-## What gets downloaded, and under what licence
+## What gets downloaded
 
-None of this is bundled — the install scripts fetch it, and it lands in
-`~/.cache`. Listed because redistributing a transcript is one thing, and
-redistributing a model is another.
+Nothing is bundled — the install scripts fetch the models and the diarizer
+binary at setup time, into `~/.cache`. One of them, NVIDIA's TitaNet-large
+speaker embedding model, is **CC-BY-4.0 and requires attribution** if you
+publish speaker-labelled output. The rest are MIT or Apache 2.0.
 
-| | Licence | Fetched by |
-| --- | --- | --- |
-| whisper.cpp | MIT | you, via Homebrew |
-| Whisper `ggml-large-v3` model | Apache 2.0 | you, via curl |
-| sherpa-onnx (diarizer binary) | Apache 2.0 | `install-diarizer.js` |
-| pyannote segmentation 3.0 | MIT | `install-diarizer.js` |
-| NVIDIA NeMo TitaNet-large | **CC-BY-4.0** | `install-diarizer.js` |
-| Silero VAD | MIT | `install-diarizer.js` |
-
-**CC-BY-4.0 requires attribution.** If speaker-labelled output is published
-outside the team, credit NVIDIA's TitaNet-large model. Everything else is
-permissive with no attribution requirement in normal use.
-
-The pyannote model is fetched from sherpa-onnx's release page rather than
-HuggingFace, which is why no HuggingFace account or token is needed.
+See [THIRD-PARTY.md](THIRD-PARTY.md) for the full list.
 
 ## Tests
 
