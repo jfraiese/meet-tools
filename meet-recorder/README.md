@@ -17,7 +17,9 @@ Requires Chrome 116 or newer.
    `meet-recorder/`.
 2. A setup tab opens once. Grant microphone access — Chrome only allows that
    prompt from a real tab, which is the whole reason that page exists.
-3. Check the shortcut at `chrome://extensions/shortcuts`. Default `⌘⇧U`.
+3. Check the shortcut at `chrome://extensions/shortcuts`. `⌘⇧U` is requested,
+   but Chrome drops it silently if something else already owns it — whatever is
+   listed there is what works, and the popup prints the same thing.
 
 Loading unpacked means Chrome will show a "Disable developer mode extensions"
 warning on each restart. That is expected for an extension not shipped through
@@ -29,7 +31,8 @@ Join a Meet. A banner appears reading **Record this meeting — press ⌘⇧U**.
 
 Two ways to start, and both work every time:
 
-- the shortcut, `⌘⇧U`
+- the keyboard shortcut — the popup prints the one Chrome actually gave you,
+  which is not always the `⌘⇧U` the manifest asks for
 - the toolbar icon → **Start recording**
 
 **The banner has no Record button, on purpose.** Chrome grants tab capture only
@@ -46,16 +49,38 @@ Recording stops — and saves — when you leave the call, close the tab, press 
 shortcut again, or hit **Stop and save** in the popup or the banner. The banner
 turns green with the filename once the file is on disk.
 
+### Muting yourself in Meet also mutes the recording
+
+It did not, until it did — and the gap was worth closing. The extension captures
+your microphone through `getUserMedia`, a separate capture that Meet's mute
+button cannot reach. So muting yourself and muttering used to put the mutter in
+the recording and in the transcript, having been heard by nobody in the meeting.
+
+Now Meet's mute closes a gate on your side of the mix, the popup labels your
+meter **You · muted**, and the meter reads empty because it sits after the gate
+and shows what is being recorded rather than what the microphone can hear.
+
+Detection reads Meet's own mic button and is three-valued, like call detection.
+If the markup changes and nothing is recognised, **your side keeps recording** —
+a meeting you can only half hear cannot be repaired afterwards, and a muttered
+aside can.
+
 ### Checking it is working
 
-Open the toolbar popup mid-call. It shows how long it has been recording, and a
-level meter for each side — **You** is your microphone, **Them** is everyone
-else. Both should move when the matching person talks. That is the fastest
-answer to the only question worth asking during a recording, and the reason the
-meters are the biggest thing in the panel rather than a status word.
+Open the toolbar popup mid-call. It shows how long it has been recording, how
+many people it counted, and a level meter for each side — **You** is your
+microphone, **Them** is everyone else. Both should move when the matching person
+talks. That is the fastest answer to the only question worth asking during a
+recording, and the reason the meters are the biggest thing in the panel rather
+than a status word.
 
 If both meters sit empty, the popup says so in words rather than leaving you to
 interpret two still bars.
+
+The popup names the keyboard shortcut it reads back from Chrome, not the one in
+the manifest. Chrome silently drops a suggested combination that collides with
+something else, and rebinding at `chrome://extensions/shortcuts` is common — so
+the manifest's `⌘⇧U` is a request, and what the popup prints is what will work.
 
 Saving never blocks the next recording. The stop path reports itself finished
 before it downloads, so a download that fails or stalls cannot leave the
@@ -76,18 +101,26 @@ Two files land per meeting:
 2026-08-10-1403-weekly-sync-abc-defg-hij.json
 ```
 
-The `.json` records duration, the call code, why recording stopped, and how many
-milliseconds each source carried sound:
+The `.json` records duration, the call code, why recording stopped, how many
+people were on the call, and how many milliseconds each source carried sound:
 
 ```json
+"participants": 4,
 "sources": { "micActiveMs": 412000, "tabActiveMs": 2380000 }
 ```
 
-Check it if a transcript comes out one-sided. A `0` is a dead source; a small
-number is a participant who mostly listened. This deliberately reports the
+**`sources`** is where to look if a transcript comes out one-sided. A `0` is a
+dead source; a small number is someone who mostly listened. It reports the
 measurement rather than a verdict — an earlier version tried to say whether each
 source "worked", and could not tell a broken microphone from someone letting a
 colleague finish.
+
+**`participants`** is the most people seen at once, counted from participant
+tiles. It exists to save you typing: `meet-transcribe` has to be told how many
+people spoke before it can label them. It is a count of *visible tiles*, not a
+roll call — Meet stops rendering one per person in large calls, and someone who
+never speaks or turns on a camera may not get one. `null` means the page did not
+say. Check it before passing it to `--speakers`.
 
 Then, when you want the text, right-click the `.webm` in Finder →
 **Quick Actions → Transcribe with Whisper**. See
@@ -134,6 +167,12 @@ Run against a real two-participant call after any change to `content.js`,
       **Them** keeps moving.
 - [ ] Starting from the popup works on a tab where the extension has never been
       touched — that is the case the banner's old Record button failed.
+- [ ] Every button in the popup is pressable. A disabled one looks nearly
+      normal, which is how they all shipped inert once.
+- [ ] Muting yourself in Meet empties the **You** meter and labels it muted,
+      and unmuting brings it back — without restarting the recording.
+- [ ] Say something while muted, then check the transcript does not contain it.
+- [ ] The sidecar's `participants` matches the number of people actually there.
 - [ ] `killall -9 "Google Chrome"` mid-recording, then reopening, offers
       **Save it now**, and the recovered file plays.
 
@@ -185,6 +224,7 @@ offscreen.js    the only place audio exists — graph, recorder, levels, downloa
 popup.js        the control surface — start, stop, live meters, clock, recovery
 setup.js        one-time microphone grant
 db.js           IndexedDB chunk store, so a crash costs seconds not the meeting
+icons/          toolbar and store icons, 16/32/48/128
 lib/            pure, no chrome.* — the only part node --test can reach
 ```
 

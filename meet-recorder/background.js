@@ -326,6 +326,29 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       return;
     }
 
+    // Mute and the head count, from the page. Mute goes straight through to the
+    // audio graph: Meet's mute button does not touch getUserMedia, so without
+    // this the extension records you while the room hears nothing.
+    if (msg?.type === 'mic-state') {
+      const rec = await readState();
+      await chrome.storage.session.set({
+        mic: { muted: msg.muted, participants: msg.participants, source: msg.participantSource },
+      });
+      if (rec.state === RECORDING && (await chrome.offscreen.hasDocument())) {
+        await sendToOffscreen(
+          {
+            target: 'offscreen',
+            type: 'mic-state',
+            muted: msg.muted === true,
+            participants: msg.participants,
+          },
+          1,
+        );
+      }
+      sendResponse({ ok: true });
+      return;
+    }
+
     if (msg?.type === 'popup-status') {
       const healed = await reconcile();
       sendResponse({ ...healed, hasOffscreen: await chrome.offscreen.hasDocument() });

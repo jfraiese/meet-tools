@@ -27,6 +27,7 @@
   let shadow = null;
   let lastSent = null;
   let dismissedCode = null;
+  let lastMic = null;
   let debounce = null;
 
   function ensureBanner() {
@@ -137,6 +138,27 @@
     }
   }
 
+  /**
+   * Mute and the head count, on their own change key.
+   *
+   * Not folded into report(): that one returns early unless the *call* state
+   * changed, and mute changes many times inside a single unchanged call. Sent
+   * only when the answer actually differs, so muting once does not become a
+   * message per DOM mutation on a page that mutates constantly.
+   */
+  function reportMic() {
+    const { muted } = lib.detectMuted(document);
+    const { count, source } = lib.countParticipants(document);
+
+    const key = `${muted}:${count}`;
+    if (key === lastMic) return;
+    lastMic = key;
+
+    chrome.runtime
+      .sendMessage({ type: 'mic-state', muted, participants: count, participantSource: source })
+      .catch(() => {});
+  }
+
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg?.type !== 'recording-state') return;
     if (msg.state === 'recording') {
@@ -164,8 +186,19 @@
 
   const observer = new MutationObserver(() => {
     clearTimeout(debounce);
-    debounce = setTimeout(report, 400);
+    debounce = setTimeout(() => {
+      report();
+      reportMic();
+    }, 400);
   });
-  observer.observe(document.documentElement, { childList: true, subtree: true });
+  // attributes too: muting changes an aria-label on a button that is already
+  // there, which childList alone never sees.
+  observer.observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['aria-label', 'data-is-muted'],
+  });
   report();
+  reportMic();
 })();

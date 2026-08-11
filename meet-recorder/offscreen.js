@@ -130,13 +130,23 @@ async function start({ streamId, meta }) {
     channelCountMode: 'explicit',
   });
 
+  // Your side passes through a gate that Meet's mute button closes. Without it
+  // the recording keeps your microphone whatever Meet is showing, because
+  // getUserMedia is a separate capture that Meet cannot reach — so a muttered
+  // aside nobody in the meeting heard would land in the file and the transcript.
+  const micGain = new GainNode(ctx, { gain: 1 });
+
   tabSource.connect(mix);
-  micSource.connect(mix);
+  micSource.connect(micGain);
+  micGain.connect(mix);
   mix.connect(destination);
 
   tabSource.connect(ctx.destination); // un-mute the tab for the user
 
-  const monitors = { mic: makeMonitor(ctx, micSource), tab: makeMonitor(ctx, tabSource) };
+  // The mic monitor sits *after* the gate, so the meter shows what is being
+  // recorded rather than what the microphone can hear. Muted reads as empty,
+  // which is the honest answer to "is my side going in".
+  const monitors = { mic: makeMonitor(ctx, micGain), tab: makeMonitor(ctx, tabSource) };
 
   const recorder = new MediaRecorder(destination.stream, {
     mimeType: 'audio/webm;codecs=opus',
@@ -175,8 +185,11 @@ async function start({ streamId, meta }) {
     monitors,
     tabStream,
     micStream,
+    micGain,
     startedAt: new Date(meta.startedAt),
     stopReason: 'manual',
+    muted: false,
+    participants: meta.participants ?? null,
     sampler: null,
   };
 
@@ -244,6 +257,7 @@ async function finish() {
     callCode,
     tabTitle: s.meta.tabTitle,
     stopReason: s.stopReason,
+    participants: s.participants,
     sources: {
       micActiveMs: s.monitors.mic.activeMs,
       tabActiveMs: s.monitors.tab.activeMs,
@@ -353,7 +367,24 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       startedAt: session ? session.startedAt.getTime() : null,
       mic: session ? session.monitors.mic.peak() : 0,
       tab: session ? session.monitors.tab.peak() : 0,
+      muted: session ? session.muted : false,
+      participants: session ? session.participants : null,
     });
+    return false;
+  }
+
+  // Meet's mute, applied to the recording. Gating the gain rather than stopping
+  // the track: a stopped MediaStreamTrack cannot be restarted, so unmuting
+  // would need the whole graph rebuilt mid-recording.
+  if (msg.type === 'mic-state') {
+    if (session) {
+      session.muted = msg.muted;
+      session.micGain.gain.value = msg.muted ? 0 : 1;
+      // The highest count seen: people arrive late, and the number that helps
+      // when transcribing is how many were ever in the room.
+      if (msg.participants > (session.participants ?? 0)) session.participants = msg.participants;
+    }
+    sendResponse({ ok: true, recording: Boolean(session) });
     return false;
   }
 

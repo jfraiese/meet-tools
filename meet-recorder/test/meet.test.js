@@ -4,8 +4,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-const { callCodeFromUrl, isCallUrl, detectInCall, IN_CALL_SELECTORS, CALL_ENDED_SELECTORS } =
-  await import('../lib/meet.js');
+const {
+  callCodeFromUrl,
+  isCallUrl,
+  detectInCall,
+  detectMuted,
+  countParticipants,
+  IN_CALL_SELECTORS,
+  CALL_ENDED_SELECTORS,
+} = await import('../lib/meet.js');
 
 test('a call URL yields its code, whatever else is on the URL', () => {
   assert.equal(callCodeFromUrl('https://meet.google.com/abc-defg-hij'), 'abc-defg-hij');
@@ -50,4 +57,62 @@ test('recognising nothing is its own answer, distinct from "not in a call"', () 
   // Collapsing the two is what made a finished call look like a live one.
   const root = { querySelector: () => null };
   assert.deepEqual(detectInCall(root), { inCall: false, ended: false, matchedBy: null });
+});
+
+test('mute is three-valued, and unknown means keep recording', () => {
+  // Meet's mute button does not touch getUserMedia, so without this the
+  // extension records you while the room hears nothing. But an unrecognised
+  // page must not silently drop your side: a half-audible meeting cannot be
+  // fixed afterwards, a muttered aside can.
+  const root = (sel) => ({ querySelector: (s) => (s === sel ? {} : null) });
+  assert.deepEqual(detectMuted(root('[data-is-muted="true"]')), {
+    muted: true,
+    matchedBy: '[data-is-muted="true"]',
+  });
+  assert.equal(detectMuted(root('button[aria-label^="Turn on microphone"]')).muted, true);
+  assert.equal(detectMuted(root('button[aria-label^="Turn off microphone"]')).muted, false);
+  assert.equal(detectMuted(root('[data-is-muted="false"]')).muted, false);
+  assert.deepEqual(detectMuted({ querySelector: () => null }), { muted: null, matchedBy: null });
+});
+
+test('"turn on microphone" means muted, which is the easy one to invert', () => {
+  // The label describes what the button will do, not what the mic is doing.
+  // Reading it the other way round records exactly the wrong half of a call.
+  const offered = (label) => ({
+    querySelector: (s) => (s === `button[aria-label^="${label}"]` ? {} : null),
+  });
+  assert.equal(detectMuted(offered('Turn on microphone')).muted, true, 'offered ON => it is off');
+  assert.equal(detectMuted(offered('Turn off microphone')).muted, false, 'offered OFF => it is on');
+});
+
+test('a malformed selector cannot take the mute probe down', () => {
+  assert.deepEqual(
+    detectMuted({
+      querySelector: () => {
+        throw new Error('bad selector');
+      },
+    }),
+    { muted: null, matchedBy: null },
+  );
+});
+
+test('participants are counted from tiles, with the source recorded', () => {
+  const root = { querySelectorAll: (s) => (s.startsWith('[aria-label^="More options') ? [1, 2, 3] : []) };
+  const { count, source } = countParticipants(root);
+  assert.equal(count, 3);
+  assert.match(source, /More options/);
+});
+
+test('no recognisable tiles means no number, not zero', () => {
+  // Zero people is impossible in a call you are in, so reporting it would be a
+  // lie that reads as data. Null says "did not find out".
+  assert.deepEqual(countParticipants({ querySelectorAll: () => [] }), { count: null, source: null });
+  assert.equal(
+    countParticipants({
+      querySelectorAll: () => {
+        throw new Error('bad');
+      },
+    }).count,
+    null,
+  );
 });

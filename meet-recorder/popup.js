@@ -31,6 +31,7 @@ const segsOf = (host) => {
   });
   return made;
 };
+const micLabel = document.getElementById('mic-label');
 const micSegs = segsOf(document.getElementById('mic'));
 const tabSegs = segsOf(document.getElementById('tab'));
 
@@ -50,11 +51,22 @@ function show({ state, status, subject = '', action = null, actionLabel = '', hi
   // No action means no button. A disabled control with a placeholder label is
   // an invitation that goes nowhere; the sentence above it already explains
   // what to do instead.
+  //
+  // `disabled` is cleared explicitly, not just left alone: the markup ships it
+  // set so the button cannot be pressed during the async setup above, and
+  // forgetting to clear it here made every button inert while still looking
+  // almost normal — a washed-out control reads as a style, not a fault.
   toggle.hidden = !action;
+  toggle.disabled = !action;
   toggle.textContent = actionLabel;
   toggle.onclick = action;
   hintEl.innerHTML = hint;
   hintEl.hidden = !hint;
+  // chrome:// pages cannot be opened from a link, only from the extension.
+  hintEl.querySelector('#bind')?.addEventListener('click', (event) => {
+    event.preventDefault();
+    chrome.tabs.create({ url: 'chrome://extensions/shortcuts' });
+  });
 }
 
 /** What the meeting is called, without Meet's own suffix. */
@@ -65,8 +77,16 @@ const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 const rec = (await chrome.runtime.sendMessage({ type: 'popup-status' })) ?? { state: 'idle' };
 const { micGranted } = await chrome.storage.local.get('micGranted');
 
-const SHORTCUT = /Mac/i.test(navigator.userAgent) ? '⌘⇧U' : 'Ctrl+Shift+U';
-const shortcutHint = `<kbd>${SHORTCUT}</kbd> works without opening this`;
+// Asked, not assumed. Chrome silently drops a suggested shortcut that collides
+// with something else and lets the user rebind it at chrome://extensions/shortcuts,
+// so the combination in the manifest is a request, not a fact — printing it
+// regardless is how you tell someone to press keys that do nothing.
+const binding = (await chrome.commands.getAll().catch(() => []))
+  .find((c) => c.name === 'toggle-recording')?.shortcut;
+
+const shortcutHint = binding
+  ? `<kbd>${binding}</kbd> works without opening this`
+  : '<a href="#" id="bind">Set a keyboard shortcut</a> to start without opening this';
 
 let poll = null;
 
@@ -80,10 +100,11 @@ if (!micGranted) {
   });
 } else if (rec.state === 'recording' || rec.state === 'arming') {
   const starting = rec.state === 'arming';
+  const name = meetingName(tab);
   show({
     state: rec.state,
     status: starting ? 'Starting' : 'Recording',
-    subject: meetingName(tab),
+    subject: name,
     actionLabel: 'Stop and save',
     action: async () => {
       show({ state: 'stopping', status: 'Saving', subject: 'Writing the file to Downloads.' });
@@ -116,11 +137,17 @@ if (!micGranted) {
     }
     stateEl.textContent = 'Recording';
     panel.dataset.state = 'recording';
+    micLabel.textContent = levels.muted ? 'You · muted' : 'You';
+    micLabel.classList.toggle('muted', Boolean(levels.muted));
 
-    // Said rather than implied: an empty meter on both sides for a while is the
-    // one thing worth interrupting someone about, and it is exactly what a
-    // glance at a moving meter would miss.
-    const silent = mic === 0 && tabLevel === 0;
+    if (levels.participants) {
+      subjectEl.textContent = `${name} · ${levels.participants} on the call`;
+    }
+
+    // Said rather than implied. An empty meter on both sides is worth
+    // interrupting someone about — but not when they muted themselves and
+    // nobody happens to be talking, which is an ordinary moment in a meeting.
+    const silent = mic === 0 && tabLevel === 0 && !levels.muted;
     quietEl.hidden = !silent;
     quietEl.textContent = silent ? 'No sound on either side right now.' : '';
   };

@@ -40,7 +40,15 @@ export function recordingBasename({ startedAt, tabTitle, callCode }) {
  * be withdrawn: nothing observable in a 30-second window separates a dead
  * microphone from someone listening politely.
  */
-export function buildSidecar({ startedAt, endedAt, callCode, tabTitle, stopReason, sources }) {
+export function buildSidecar({
+  startedAt,
+  endedAt,
+  callCode,
+  tabTitle,
+  stopReason,
+  sources,
+  participants = null,
+}) {
   return {
     startedAt: startedAt.toISOString(),
     endedAt: endedAt.toISOString(),
@@ -48,6 +56,11 @@ export function buildSidecar({ startedAt, endedAt, callCode, tabTitle, stopReaso
     callCode,
     tabTitle: String(tabTitle ?? ''),
     stopReason,
+    // The most people seen in the call at once, counted from participant tiles,
+    // or null when the page did not say. Its use is transcription: the diarizer
+    // has to be told how many people spoke, and this beats guessing. It is not
+    // authoritative — see countParticipants in lib/meet.js for why.
+    participants,
     sources,
   };
 }

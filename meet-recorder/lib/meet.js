@@ -51,6 +51,76 @@ export const IN_CALL_SELECTORS = [
   'button[aria-label="Abandonar la llamada"]',
 ];
 
+/**
+ * Your microphone is muted *in Meet*.
+ *
+ * This matters more than it looks. The extension captures the microphone
+ * through getUserMedia, which Meet's mute button does not touch — so without
+ * this, muting yourself and muttering puts the mutter in the recording and in
+ * the transcript, having been heard by nobody in the meeting.
+ *
+ * Ordered by confidence, same as call detection: the attribute is structural
+ * and survives translation, the labels are the readable fallback.
+ */
+export const MIC_MUTED_SELECTORS = [
+  '[data-is-muted="true"]',
+  'button[aria-label^="Turn on microphone"]',
+  'button[aria-label^="Activar micrófono"]',
+];
+
+export const MIC_LIVE_SELECTORS = [
+  '[data-is-muted="false"]',
+  'button[aria-label^="Turn off microphone"]',
+  'button[aria-label^="Desactivar micrófono"]',
+];
+
+/**
+ * `{ muted, matchedBy }`, where muted is true, false, or null for "cannot tell".
+ *
+ * Null is not muted. Unrecognised markup must never silently drop your side of
+ * a recording — a meeting you can only half hear is a worse outcome than a
+ * muttered aside surviving, and it is the one you cannot fix afterwards.
+ */
+export function detectMuted(root) {
+  const muted = firstMatch(root, MIC_MUTED_SELECTORS);
+  if (muted) return { muted: true, matchedBy: muted };
+
+  const live = firstMatch(root, MIC_LIVE_SELECTORS);
+  if (live) return { muted: false, matchedBy: live };
+
+  return { muted: null, matchedBy: null };
+}
+
+/**
+ * How many people are in the call, counted from the participant tiles.
+ *
+ * Every tile carries a "More options for <name>" control, which is where this
+ * number comes from. That makes it a count of *visible tiles*, which is not
+ * always the same as the number of people: Meet stops rendering a tile per
+ * person in large calls, and someone who never turns on a camera or speaks may
+ * not get one.
+ *
+ * So it is reported with its source and never as a fact. It exists to save
+ * typing when transcribing — the diarizer has to be told how many people spoke,
+ * and this is a better first guess than nothing.
+ */
+export const PARTICIPANT_TILE_SELECTORS = [
+  '[aria-label^="More options for "]',
+  '[aria-label^="Más opciones de "]',
+];
+
+export function countParticipants(root) {
+  for (const selector of PARTICIPANT_TILE_SELECTORS) {
+    try {
+      const found = root.querySelectorAll(selector).length;
+      if (found > 0) return { count: found, source: selector };
+    } catch {
+      // A malformed selector must not take the whole probe down.
+    }
+  }
+  return { count: null, source: null };
+}
+
 const firstMatch = (root, selectors) => {
   for (const sel of selectors) {
     try {
