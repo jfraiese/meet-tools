@@ -331,8 +331,29 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
   // 'ping' answers whether a recording is genuinely live here, which is how the
   // worker tells a real recording from a stale state left by a dead document.
+  // `startedAt` rides along because this document is the only thing that knows
+  // when the recording actually began — the worker's copy is a label, this is
+  // the fact, and the popup's timer has to agree with the file that lands.
   if (msg.type === 'ping') {
-    sendResponse({ ok: true, recording: Boolean(session) });
+    sendResponse({
+      ok: true,
+      recording: Boolean(session),
+      startedAt: session ? session.startedAt.getTime() : null,
+    });
+    return false;
+  }
+
+  // Live meter levels. Polled by the popup only while it is open — a few
+  // seconds at a time — rather than pushed continuously to a listener that is
+  // usually not there.
+  if (msg.type === 'levels-now') {
+    sendResponse({
+      ok: true,
+      recording: Boolean(session),
+      startedAt: session ? session.startedAt.getTime() : null,
+      mic: session ? session.monitors.mic.peak() : 0,
+      tab: session ? session.monitors.tab.peak() : 0,
+    });
     return false;
   }
 

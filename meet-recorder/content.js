@@ -1,11 +1,15 @@
 // Injected on meet.google.com. Two jobs: notice when you are actually in a
-// call, and offer the banner that starts and stops recording.
+// call, and show the banner.
 //
-// The banner's button does work, but it is not guaranteed: Chrome grants tab
-// capture only once the extension itself has been invoked, and a click inside
-// the page does not count as that gesture. So the first press of a session can
-// be refused, `startCapture` reports the refusal back as a banner note, and the
-// shortcut named there always works. Stopping needs no permission.
+// **The banner cannot start a recording, and does not offer to.** Chrome grants
+// tab capture only to a tab the extension itself has been invoked on — a
+// `commands` shortcut, a toolbar click, a context menu — and a click on our own
+// banner inside the page is none of those. A Record button here was tried and
+// removed: it failed on exactly the press people actually make, the first one,
+// and an affordance that usually refuses is worse than no affordance. So the
+// banner names the shortcut, and the toolbar popup is the other way in.
+//
+// Stopping needs no permission, so the banner does offer that.
 //
 // Meet is a single-page app: joining a call replaces the green room in place
 // with no navigation, so this observes the DOM rather than reading it once.
@@ -64,9 +68,6 @@
     shadow.querySelector('.act').addEventListener('click', async () => {
       const action = shadow.querySelector('.act').dataset.action;
       if (!action) return;
-      // Stopping needs no permission and always works. Starting may be refused
-      // — Chrome only grants tab capture after the extension itself is invoked
-      // — and startCapture reports that back as a banner note.
       await chrome.runtime.sendMessage({ type: `banner-${action}` }).catch(() => {});
     });
     shadow.querySelector('.close').addEventListener('click', () => {
@@ -76,7 +77,22 @@
     document.documentElement.append(host);
   }
 
+  // Dismissing is a real preference, not a repaint. The ✕ used to be undone by
+  // the next message the worker sent: `report()` checked `dismissedCode` but
+  // every recording-state message called showBanner directly, so a silence
+  // warning reappeared seconds after being closed, with the same ✕ that had
+  // just failed to remove it.
+  //
+  // So passive states — the idle offer, and warnings — honour a dismissal.
+  // 'recording' and 'saved' follow from something the person just did, and
+  // clear it: acting is how you ask for the banner back.
+  const PASSIVE = new Set(['idle', 'warn']);
+
   function showBanner(state, message, action = null, actionLabel = '') {
+    const callCode = lib.callCodeFromUrl(location.href);
+    if (PASSIVE.has(state) && callCode === dismissedCode) return;
+    if (!PASSIVE.has(state)) dismissedCode = null;
+
     ensureBanner();
     shadow.querySelector('.bar').dataset.state = state;
     shadow.querySelector('.msg').textContent = message;
@@ -112,11 +128,11 @@
       .sendMessage({ type: 'call-state', inCall: active, callCode, matchedBy })
       .catch(() => {}); // the worker may be asleep; it will ask again
 
-    if (active && callCode !== dismissedCode) {
-      // The shortcut is named next to the button because the button is the
-      // path that can be refused and the shortcut is the one that cannot.
-      showBanner('idle', `Record this meeting — ${SHORTCUT}`, 'start', 'Record');
-    } else if (!active) {
+    if (active) {
+      // No button: naming the shortcut is the whole offer, because it is the
+      // part that always works. showBanner honours a dismissal for this state.
+      showBanner('idle', `Record this meeting — press ${SHORTCUT}`);
+    } else {
       hideBanner();
     }
   }
@@ -136,9 +152,9 @@
       }, 6000);
     }
     else if (msg.state === 'idle') {
-      // A note here means the start was refused. Keep the button, so trying
-      // again after doing what the note asks is one click.
-      if (msg.note) showBanner('warn', msg.note, 'start', 'Record');
+      // A note here means the start failed. Show why; there is no retry button
+      // because a click in the page cannot start a recording either way.
+      if (msg.note) showBanner('warn', msg.note);
       else {
         lastSent = null; // force the next report to re-render the idle banner
         report();

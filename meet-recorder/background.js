@@ -40,22 +40,24 @@ async function reconcile() {
   const rec = await readState();
 
   let live = false;
+  let startedAt = null;
   if (await chrome.offscreen.hasDocument()) {
     const response = await sendToOffscreen({ target: 'offscreen', type: 'ping' }, 3);
     live = Boolean(response?.recording);
+    startedAt = response?.startedAt ?? null;
   }
 
   // Sync in both directions. Healing only the stale-recording case left the
   // opposite divergence — a live recording the worker believed was idle —
   // which made the next press try to *start* one, get silently refused, and
   // wedge everything including the stop.
-  if (live && rec.state !== RECORDING) {
-    const synced = { ...rec, state: RECORDING };
+  if (live && (rec.state !== RECORDING || rec.startedAt !== startedAt)) {
+    const synced = { ...rec, state: RECORDING, startedAt };
     await writeState(synced);
     return synced;
   }
   if (!live && rec.state !== IDLE) {
-    const healed = { ...rec, state: IDLE };
+    const healed = { ...rec, state: IDLE, startedAt: null };
     await writeState(healed);
     return healed;
   }
@@ -183,15 +185,17 @@ async function startCapture(rec) {
   try {
     streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: rec.tabId });
   } catch (err) {
-    // Chrome grants tab capture only after the extension itself is invoked —
-    // an action click, a context menu item, or the commands shortcut. A click
-    // on our own banner is none of those, so say what will work.
+    // Chrome grants tab capture only to a tab the extension itself has been
+    // invoked on — the commands shortcut, a toolbar click, a context menu.
+    // Both routes that reach here qualify, so this should not fire; it stays
+    // because "should not" is not "cannot", and a capture that fails silently
+    // is the failure this whole tool exists to avoid.
     const needsInvoking = /invoke|activeTab/i.test(err.message);
     await tellTab(rec.tabId, {
       type: 'recording-state',
       state: 'idle',
       note: needsInvoking
-        ? 'Chrome needs the extension itself first — press the shortcut, or click the toolbar icon once. After that this button works.'
+        ? 'Chrome would not grant this tab to the extension. Click the toolbar icon, then Start recording.'
         : `Could not capture this tab: ${err.message}`,
     });
     await dispatch('error');
@@ -328,17 +332,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       return;
     }
 
-    // The banner's button. Stopping is always allowed; starting may be refused
-    // by Chrome, and startCapture explains that on the banner when it is.
-    if (msg?.type === 'banner-start') {
-      const rec = await reconcile();
-      if (rec.state === IDLE && sender.tab && isCallUrl(sender.tab.url ?? '')) {
-        await dispatch('toggle', {
-          tabId: sender.tab.id,
-          callCode: callCodeFromUrl(sender.tab.url),
-        });
+    // Live meter levels for the popup, straight from the document that holds
+    // the audio. Polled while the popup is open rather than pushed, so nothing
+    // is broadcast to a listener that is usually not there.
+    if (msg?.type === 'popup-levels') {
+      if (!(await chrome.offscreen.hasDocument())) {
+        sendResponse({ recording: false });
+        return;
       }
-      sendResponse({ ok: true });
+      const levels = await sendToOffscreen({ target: 'offscreen', type: 'levels-now' }, 1);
+      sendResponse(levels ?? { recording: false });
       return;
     }
 

@@ -1,72 +1,169 @@
+// The control surface. Starting lives here rather than on the in-page banner
+// because opening this popup *is* the gesture Chrome requires before it will
+// grant tab capture — a click inside the meeting page is not, which is why the
+// banner's Record button was removed rather than debugged.
+//
+// Everything here reads from the offscreen document through the worker. That
+// document is the only thing that knows whether audio is really flowing, so the
+// meters and the clock cannot drift from the file that eventually lands.
+
 import { isCallUrl, callCodeFromUrl } from './lib/meet.js';
+import { levelFraction, litSegments, formatElapsed, SEGMENTS } from './lib/meter.js';
 import { countChunks, readMeta, clearSession } from './db.js';
 
+const POLL_MS = 120;
+const HOT_FROM = 0.82;
+
+const panel = document.getElementById('panel');
 const stateEl = document.getElementById('state');
-const sourcesEl = document.getElementById('sources');
-const micEl = document.getElementById('mic');
-const tabEl = document.getElementById('tab');
+const clockEl = document.getElementById('clock');
+const subjectEl = document.getElementById('subject');
+const metersEl = document.getElementById('meters');
+const quietEl = document.getElementById('quiet');
 const toggle = document.getElementById('toggle');
+const hintEl = document.getElementById('hint');
+
+const segsOf = (host) => {
+  const made = Array.from({ length: SEGMENTS }, () => document.createElement('span'));
+  made.forEach((s) => {
+    s.className = 'seg';
+    host.append(s);
+  });
+  return made;
+};
+const micSegs = segsOf(document.getElementById('mic'));
+const tabSegs = segsOf(document.getElementById('tab'));
+
+function paint(segs, peak) {
+  const lit = litSegments(peak);
+  segs.forEach((seg, i) => {
+    seg.classList.toggle('on', i < lit);
+    seg.classList.toggle('hot', i / SEGMENTS >= HOT_FROM);
+  });
+  return levelFraction(peak);
+}
+
+function show({ state, status, subject = '', action = null, actionLabel = '', hint = '' }) {
+  panel.dataset.state = state;
+  stateEl.textContent = status;
+  subjectEl.textContent = subject;
+  // No action means no button. A disabled control with a placeholder label is
+  // an invitation that goes nowhere; the sentence above it already explains
+  // what to do instead.
+  toggle.hidden = !action;
+  toggle.textContent = actionLabel;
+  toggle.onclick = action;
+  hintEl.innerHTML = hint;
+  hintEl.hidden = !hint;
+}
+
+/** What the meeting is called, without Meet's own suffix. */
+const meetingName = (t) =>
+  t?.title?.replace(/\s*[-–—]\s*Google Meet\s*$/i, '').trim() || callCodeFromUrl(t?.url ?? '') || '';
 
 const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 const rec = (await chrome.runtime.sendMessage({ type: 'popup-status' })) ?? { state: 'idle' };
 const { micGranted } = await chrome.storage.local.get('micGranted');
-const { levels } = await chrome.storage.session.get('levels');
 
-const label = (status) => (status === 'silent' ? 'silent' : status === 'active' ? 'ok' : '—');
+const SHORTCUT = /Mac/i.test(navigator.userAgent) ? '⌘⇧U' : 'Ctrl+Shift+U';
+const shortcutHint = `<kbd>${SHORTCUT}</kbd> works without opening this`;
+
+let poll = null;
 
 if (!micGranted) {
-  stateEl.textContent = 'Setup not finished';
-  toggle.textContent = 'Open setup';
-  toggle.disabled = false;
-  toggle.addEventListener('click', () =>
-    chrome.tabs.create({ url: chrome.runtime.getURL('setup.html') }),
-  );
-} else if (rec.state === 'recording' || rec.state === 'arming') {
-  stateEl.textContent = rec.state === 'arming' ? 'Starting…' : 'Recording';
-  sourcesEl.hidden = false;
-  micEl.textContent = `You: ${label(levels?.mic)}`;
-  micEl.className = levels?.mic === 'silent' ? 'silent' : '';
-  tabEl.textContent = `Them: ${label(levels?.tab)}`;
-  tabEl.className = levels?.tab === 'silent' ? 'silent' : '';
-  toggle.textContent = 'Stop and save';
-  toggle.disabled = false;
-  toggle.addEventListener('click', async () => {
-    await chrome.runtime.sendMessage({ type: 'popup-toggle' });
-    window.close();
+  show({
+    state: 'setup',
+    status: 'Setup unfinished',
+    subject: 'Chrome will only ask for the microphone from a real tab.',
+    actionLabel: 'Finish setup',
+    action: () => chrome.tabs.create({ url: chrome.runtime.getURL('setup.html') }),
   });
+} else if (rec.state === 'recording' || rec.state === 'arming') {
+  const starting = rec.state === 'arming';
+  show({
+    state: rec.state,
+    status: starting ? 'Starting' : 'Recording',
+    subject: meetingName(tab),
+    actionLabel: 'Stop and save',
+    action: async () => {
+      show({ state: 'stopping', status: 'Saving', subject: 'Writing the file to Downloads.' });
+      await chrome.runtime.sendMessage({ type: 'popup-toggle' });
+      window.close();
+    },
+  });
+
+  metersEl.hidden = starting;
+  clockEl.hidden = true;
+
+  // One poll drives both the meters and the clock, so they can never disagree
+  // about whether a recording is still live.
+  const tick = async () => {
+    const levels = await chrome.runtime.sendMessage({ type: 'popup-levels' }).catch(() => null);
+    if (!levels?.recording) {
+      // It ended underneath us — the call dropped, or another surface stopped it.
+      clearInterval(poll);
+      show({ state: 'idle', status: 'Not recording', subject: 'The recording has ended.' });
+      metersEl.hidden = true;
+      clockEl.hidden = true;
+      return;
+    }
+    metersEl.hidden = false;
+    const mic = paint(micSegs, levels.mic ?? 0);
+    const tabLevel = paint(tabSegs, levels.tab ?? 0);
+    if (levels.startedAt) {
+      clockEl.hidden = false;
+      clockEl.textContent = formatElapsed(Date.now() - levels.startedAt);
+    }
+    stateEl.textContent = 'Recording';
+    panel.dataset.state = 'recording';
+
+    // Said rather than implied: an empty meter on both sides for a while is the
+    // one thing worth interrupting someone about, and it is exactly what a
+    // glance at a moving meter would miss.
+    const silent = mic === 0 && tabLevel === 0;
+    quietEl.hidden = !silent;
+    quietEl.textContent = silent ? 'No sound on either side right now.' : '';
+  };
+  await tick();
+  poll = setInterval(tick, POLL_MS);
 } else if (tab && isCallUrl(tab.url ?? '')) {
-  stateEl.textContent = 'Ready to record';
-  toggle.textContent = 'Start recording';
-  toggle.disabled = false;
-  toggle.addEventListener('click', async () => {
-    await chrome.runtime.sendMessage({
-      type: 'popup-toggle',
-      tabId: tab.id,
-      callCode: callCodeFromUrl(tab.url),
-    });
-    window.close();
+  const code = callCodeFromUrl(tab.url);
+  show({
+    state: 'idle',
+    status: 'Ready',
+    subject: meetingName(tab) || 'This meeting',
+    actionLabel: 'Start recording',
+    hint: shortcutHint,
+    action: async () => {
+      show({ state: 'arming', status: 'Starting', subject: 'Asking Chrome for the tab audio.' });
+      await chrome.runtime.sendMessage({ type: 'popup-toggle', tabId: tab.id, callCode: code });
+      window.close();
+    },
   });
 } else {
-  stateEl.textContent = 'No Meet in this tab';
-  toggle.textContent = 'Nothing to record';
+  show({
+    state: 'idle',
+    status: 'No meeting here',
+    subject: 'Open a Google Meet call in this tab to record it.',
+  });
 }
 
+addEventListener('unload', () => clearInterval(poll));
+
 // Stored chunks mean a recording that never reached disk. The worker tries to
-// save these by itself on startup, so this panel is the fallback for when that
-// failed too — not the normal way recordings arrive.
+// save these by itself on startup, so this is the fallback for when that failed
+// too — not the normal way recordings arrive.
 //
 // popup-status reconciles against the offscreen document before answering, so
 // this state is the document's truth rather than a stale label.
-const liveRecording = rec.state === 'recording';
-const chunks = liveRecording ? 0 : await countChunks().catch(() => 0);
+const chunks = rec.state === 'recording' ? 0 : await countChunks().catch(() => 0);
 
 if (chunks > 0) {
   const meta = await readMeta().catch(() => null);
-  const recovery = document.getElementById('recovery');
-  recovery.hidden = false;
+  document.getElementById('recovery').hidden = false;
   document.getElementById('recovery-note').textContent = meta?.startedAt
-    ? `An unsaved recording from ${new Date(meta.startedAt).toLocaleTimeString()} is in storage.`
-    : 'An unsaved recording is in storage.';
+    ? `An unsaved recording from ${new Date(meta.startedAt).toLocaleTimeString()} is still in storage.`
+    : 'An unsaved recording is still in storage.';
 
   document.getElementById('recover').addEventListener('click', async () => {
     await chrome.runtime.sendMessage({ type: 'popup-recover' });

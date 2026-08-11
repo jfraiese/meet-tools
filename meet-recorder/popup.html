@@ -2,27 +2,140 @@
 <meta charset="utf-8">
 <title>Meet Recorder</title>
 <style>
-  body { font: 14px/1.5 system-ui, sans-serif; width: 18rem; margin: 0; padding: .9rem; }
-  h1 { font-size: .8rem; letter-spacing: .06em; text-transform: uppercase; color: #5f6368; margin: 0 0 .6rem; }
-  #state { font-weight: 600; margin-bottom: .5rem; }
-  .sources { display: flex; gap: 1rem; font-size: .82rem; color: #5f6368; margin-bottom: .8rem; }
-  .silent { color: #c5221f; font-weight: 600; }
-  button { font: inherit; width: 100%; padding: .45rem; border-radius: .4rem; border: 1px solid #dadce0; background: #fff; cursor: pointer; }
-  button:disabled { opacity: .45; cursor: default; }
-  hr { border: 0; border-top: 1px solid #e0e0e0; margin: .9rem 0; }
-  #recovery-note { font-size: .82rem; color: #5f6368; margin-bottom: .5rem; }
-  #discard { margin-top: .4rem; border-color: transparent; color: #5f6368; }
+  /* A field recorder's panel, not a dashboard card. The question this popup
+     answers is "is it running, and is it hearing both of us" — which is a
+     meter-and-counter question, so it is built out of meters and a counter.
+     Pale LCD ground, segmented levels, tabular figures. */
+  :root {
+    --panel: #ccd5b0;
+    --panel-sunk: #c2cba4;
+    --edge: #a9b389;
+    --ink: #1b2013;
+    /* Measured, not eyeballed: #55603c came out at 4.39:1 on this ground,
+       which is under the 4.5 floor for body text. */
+    --ink-soft: #4b5533;
+    --rec: #9e2b20;
+    --seg-off: rgba(27, 32, 19, .13);
+    --face: ui-monospace, "SF Mono", SFMono-Regular, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --panel: #171a11;
+      --panel-sunk: #10130c;
+      --edge: #2c3220;
+      --ink: #c2cf9c;
+      --ink-soft: #7d8a5c;
+      --rec: #e2685c;
+      --seg-off: rgba(194, 207, 156, .14);
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    width: 20rem; margin: 0; padding: .85rem;
+    background: var(--panel); color: var(--ink);
+    font: 13px/1.45 system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .label {
+    font: 600 9.5px/1 var(--face);
+    letter-spacing: .14em; text-transform: uppercase; color: var(--ink-soft);
+  }
+
+  /* Status line: what it is doing, and for how long. */
+  .head { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; }
+  .status { display: flex; align-items: center; gap: .42rem; min-width: 0; }
+  .status .label { color: var(--ink); font-size: 10.5px; }
+
+  .lamp {
+    width: .5rem; height: .5rem; border-radius: 50%;
+    background: var(--seg-off); flex: none;
+  }
+  [data-state="recording"] .lamp { background: var(--rec); animation: pulse 1.8s ease-in-out infinite; }
+  [data-state="arming"] .lamp,
+  [data-state="stopping"] .lamp { background: var(--ink-soft); animation: pulse .9s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .25; } }
+  @media (prefers-reduced-motion: reduce) { .lamp { animation: none !important; } }
+
+  .clock {
+    font: 500 22px/1 var(--face); font-variant-numeric: tabular-nums;
+    letter-spacing: -.01em; color: var(--ink);
+  }
+  .clock[hidden] { display: none; }
+
+  /* Which meeting this is about — or, when there is no meeting, what to do
+     instead. Wraps to two lines and then clips: a long meeting title should
+     not push the button off the panel, and a sentence should not be cut in
+     the middle of a word. */
+  .subject {
+    margin-top: .5rem; font-size: 12px; color: var(--ink-soft);
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+    overflow: hidden;
+  }
+  .subject:empty { display: none; }
+
+  /* Meters — the signature. Segmented rather than a smooth bar: a discrete
+     count reads as an instrument and makes "some sound" distinguishable from
+     "a lot" at a glance, which a gradient does not. */
+  .meters { margin: .8rem 0 .2rem; display: grid; gap: .42rem; }
+  .meters[hidden] { display: none; }
+  .meter { display: grid; grid-template-columns: 2.6rem 1fr; align-items: center; gap: .5rem; }
+  .segs { display: flex; gap: 2px; height: .62rem; }
+  .seg { flex: 1; background: var(--seg-off); border-radius: 1px; transition: background .08s linear; }
+  @media (prefers-reduced-motion: reduce) { .seg { transition: none; } }
+  .seg.on { background: var(--ink); }
+  .seg.on.hot { background: var(--rec); }
+
+  .quiet { margin-top: .5rem; font-size: 11.5px; color: var(--ink-soft); }
+  .quiet[hidden] { display: none; }
+
+  button {
+    font: 600 13px/1 system-ui, sans-serif; width: 100%; margin-top: .85rem;
+    padding: .6rem; border-radius: .3rem; border: 1px solid var(--ink);
+    background: var(--ink); color: var(--panel); cursor: pointer;
+  }
+  button:hover:not(:disabled) { opacity: .88; }
+  button:focus-visible { outline: 2px solid var(--rec); outline-offset: 2px; }
+  button:disabled { opacity: .4; cursor: default; }
+  button.ghost { background: transparent; color: var(--ink); }
+  button.quietly { background: none; border-color: transparent; color: var(--ink-soft); font-weight: 500; }
+
+  .hint { margin-top: .55rem; font-size: 11px; color: var(--ink-soft); text-align: center; }
+  .hint kbd {
+    font: 600 10.5px/1 var(--face); border: 1px solid var(--edge);
+    border-radius: .2rem; padding: .15rem .3rem; background: var(--panel-sunk);
+  }
+  .hint[hidden] { display: none; }
+
+  .rule { border: 0; border-top: 1px solid var(--edge); margin: .9rem 0 .7rem; }
+  #recovery[hidden] { display: none; }
+  #recovery-note { font-size: 11.5px; color: var(--ink-soft); }
 </style>
-<h1>Meet Recorder</h1>
-<div id="state">Loading…</div>
-<div class="sources" id="sources" hidden>
-  <span id="mic">You: —</span><span id="tab">Them: —</span>
+
+<div id="panel" data-state="loading">
+  <div class="head">
+    <div class="status"><span class="lamp"></span><span class="label" id="state">Checking</span></div>
+    <div class="clock" id="clock" hidden>00:00</div>
+  </div>
+
+  <div class="subject" id="subject"></div>
+
+  <div class="meters" id="meters" hidden>
+    <div class="meter"><span class="label">You</span><span class="segs" id="mic"></span></div>
+    <div class="meter"><span class="label">Them</span><span class="segs" id="tab"></span></div>
+  </div>
+  <div class="quiet" id="quiet" hidden></div>
+
+  <button id="toggle" disabled>—</button>
+  <div class="hint" id="hint" hidden></div>
+
+  <div id="recovery" hidden>
+    <hr class="rule">
+    <div id="recovery-note"></div>
+    <button id="recover" class="ghost">Save it now</button>
+    <button id="discard" class="quietly">Discard it</button>
+  </div>
 </div>
-<button id="toggle" disabled>—</button>
-<div id="recovery" hidden>
-  <hr>
-  <div id="recovery-note"></div>
-  <button id="recover">Recover last recording</button>
-  <button id="discard">Discard it</button>
-</div>
+
 <script type="module" src="popup.js"></script>

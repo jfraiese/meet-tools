@@ -25,15 +25,37 @@ the Web Store; dismiss it.
 
 ## Use
 
-Join a Meet. A banner appears reading **Record this meeting — ⌘⇧U**, with a
-Record button. The button usually works, but it is not guaranteed: Chrome grants
-tab capture only once the extension itself has been invoked, and a click inside
-the page does not count as that gesture. When it is refused the banner says so,
-and the shortcut — or the toolbar popup — always works.
+Join a Meet. A banner appears reading **Record this meeting — press ⌘⇧U**.
+
+Two ways to start, and both work every time:
+
+- the shortcut, `⌘⇧U`
+- the toolbar icon → **Start recording**
+
+**The banner has no Record button, on purpose.** Chrome grants tab capture only
+to a tab the extension itself has been invoked on — a keyboard shortcut, a
+toolbar click, a context menu. A click on our own banner, inside the page, is
+none of those. A button there was tried and removed: it failed on exactly the
+press people actually make, the first one, and an affordance that usually
+refuses is worse than no affordance.
+
+The ✕ dismisses the banner for that call. It stays dismissed — including
+through silence warnings — until you start or stop a recording.
 
 Recording stops — and saves — when you leave the call, close the tab, press the
-shortcut again, or hit **Stop and save** in the popup. The banner turns green
-with the filename once the file is on disk.
+shortcut again, or hit **Stop and save** in the popup or the banner. The banner
+turns green with the filename once the file is on disk.
+
+### Checking it is working
+
+Open the toolbar popup mid-call. It shows how long it has been recording, and a
+level meter for each side — **You** is your microphone, **Them** is everyone
+else. Both should move when the matching person talks. That is the fastest
+answer to the only question worth asking during a recording, and the reason the
+meters are the biggest thing in the panel rather than a status word.
+
+If both meters sit empty, the popup says so in words rather than leaving you to
+interpret two still bars.
 
 Saving never blocks the next recording. The stop path reports itself finished
 before it downloads, so a download that fails or stalls cannot leave the
@@ -42,8 +64,10 @@ only way out was the recovery button.
 
 If a recording never reaches disk, its chunks stay in IndexedDB and the
 extension **saves them by itself** the next time its service worker starts,
-appending `-recovered` to the name. The popup's recovery button is the fallback
-for when even that fails, not the normal way recordings arrive.
+appending `-recovered` to the name. Starting a new recording rescues one too,
+because that is the moment it would otherwise be overwritten. The popup's
+**Save it now** is the fallback for when both of those fail, not the normal way
+recordings arrive.
 
 Two files land per meeting:
 
@@ -101,10 +125,17 @@ Run against a real two-participant call after any change to `content.js`,
       drops a source still produces a file that plays.
 - [ ] Leaving the call saves two files with no further action.
 - [ ] Closing the tab mid-call saves a file with `stopReason: "tab-closed"`.
-- [ ] Muting yourself for 30 s while they talk turns the banner amber and shows
-      `You: silent` in the popup — and it turns back once you speak again.
+- [ ] Muting yourself for 30 s while they talk turns the banner amber, and it
+      turns back once you speak again.
+- [ ] Dismissing that amber banner with ✕ keeps it dismissed — going quiet
+      again does not bring it back.
+- [ ] The popup, mid-call: the clock counts up, and both meters move when the
+      matching person talks. Mute yourself and **You** falls to empty while
+      **Them** keeps moving.
+- [ ] Starting from the popup works on a tab where the extension has never been
+      touched — that is the case the banner's old Record button failed.
 - [ ] `killall -9 "Google Chrome"` mid-recording, then reopening, offers
-      **Recover last recording**, and the recovered file plays.
+      **Save it now**, and the recovered file plays.
 
 ### The fragile part
 
@@ -151,7 +182,7 @@ manifest.json   MV3: tabCapture, offscreen, downloads, storage, activeTab
 background.js   service worker — shortcut, stream id, offscreen lifecycle, badge
 content.js      injected on meet.google.com — call detection, banner
 offscreen.js    the only place audio exists — graph, recorder, levels, download
-popup.js        status, stop, crash recovery
+popup.js        the control surface — start, stop, live meters, clock, recovery
 setup.js        one-time microphone grant
 db.js           IndexedDB chunk store, so a crash costs seconds not the meeting
 lib/            pure, no chrome.* — the only part node --test can reach
@@ -172,6 +203,7 @@ where it lives:
 - `tabSource.connect(ctx.destination)` in `offscreen.js` is what keeps the call
   audible: capturing a tab mutes it for you.
 - Capture may only begin from a gesture Chrome recognises — a `commands`
-  shortcut or a toolbar click. The banner's button works once the extension has
-  been invoked in that session, and is refused before then, which is why the
-  banner names the shortcut alongside the button rather than relying on it.
+  shortcut, a toolbar click, a context menu — on the tab being captured. A click
+  on the extension's own banner, inside the page, is not one, which is why the
+  banner names the shortcut instead of offering a button, and why the popup is
+  the other way in: opening it *is* the gesture.
