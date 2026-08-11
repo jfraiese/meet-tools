@@ -14,25 +14,30 @@ Run it **twice**: once unmuted, once muted. The pair is the point — the mic
 button's label describes what pressing it will do, so the two states are what
 tell "muted" from "live" apart.
 
+No backticks and no backslashes in here, deliberately: a template literal
+collides with the code fence when this is copied out of rendered markdown, and
+a `\b` in a regex does not always survive the trip either. Both cost a paste.
+
 ```js
 copy(JSON.stringify({
   micish: [...document.querySelectorAll('[aria-label]')]
     .map(e => e.getAttribute('aria-label'))
-    .filter(l => /micro|mic\b|mute|silenc|sonido/i.test(l)),
+    .filter(l => /micro|mute|silenc|sonido/i.test(l)),
   mutedAttrs: [...document.querySelectorAll('*')]
     .flatMap(e => [...e.attributes])
     .filter(a => /mut/i.test(a.name))
-    .map(a => `${a.name}="${a.value}"`)
+    .map(a => a.name + '=' + a.value)
     .slice(0, 20),
   tiles: {
     moreOptions: document.querySelectorAll('[aria-label^="More options for "]').length,
     moreOptionsAny: document.querySelectorAll('[aria-label*="More options"]').length,
     videos: document.querySelectorAll('video').length,
-    peopleButton: [...document.querySelectorAll('[aria-label]')]
+    peopleish: [...document.querySelectorAll('[aria-label]')]
       .map(e => e.getAttribute('aria-label'))
-      .filter(l => /people|participant|personas|participante/i.test(l)),
+      .filter(l => /people|participant|personas|participante/i.test(l))
   },
-  frame: { isTop: window.top === window, labels: document.querySelectorAll('[aria-label]').length },
+  isTop: window.top === window,
+  labels: document.querySelectorAll('[aria-label]').length
 }, null, 2))
 ```
 
@@ -55,7 +60,7 @@ copy(JSON.stringify({
   dataAttrs: [...new Set([...document.querySelectorAll('*')]
     .flatMap(e => [...e.attributes]
       .filter(a => a.name.startsWith('data-') && a.value.length < 40)
-      .map(a => `${a.name}="${a.value}"`)))].slice(0, 60),
+      .map(a => a.name + '=' + a.value)))].slice(0, 60),
   ariaLabels: [...new Set([...document.querySelectorAll('[aria-label]')]
     .map(e => e.getAttribute('aria-label')))].slice(0, 50)
 }, null, 2))

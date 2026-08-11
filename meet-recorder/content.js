@@ -139,6 +139,43 @@
   }
 
   /**
+   * What the page looks like to the detectors, printed to the console.
+   *
+   * Detection reads markup Google changes without notice, and when it stops
+   * matching there is nothing to see — the extension carries on with your side
+   * recording and reports nothing. Asking someone to paste a snippet into the
+   * right console frame is a step that can itself go wrong, so the extension
+   * says it instead: open the Meet tab's console, filter for meet-recorder,
+   * right-click the object, Copy.
+   *
+   * Logged at startup and whenever the answer changes, which is quiet when
+   * detection works and exactly one line when it never does.
+   */
+  function diagnose(why) {
+    const labels = [...document.querySelectorAll('[aria-label]')].map((e) =>
+      e.getAttribute('aria-label'),
+    );
+    console.log(`[meet-recorder] ${why}`, {
+      muted: lib.detectMuted(document),
+      participants: lib.countParticipants(document),
+      inCall: lib.detectInCall(document),
+      micish: labels.filter((l) => /micro|mute|silenc|sonido/i.test(l)),
+      mutedAttrs: [...document.querySelectorAll('[data-is-muted], [data-muted]')]
+        .flatMap((e) => [...e.attributes])
+        .filter((a) => /mut/i.test(a.name))
+        .map((a) => a.name + '=' + a.value)
+        .slice(0, 10),
+      tiles: {
+        moreOptions: document.querySelectorAll('[aria-label^="More options for "]').length,
+        moreOptionsAny: document.querySelectorAll('[aria-label*="More options"]').length,
+        videos: document.querySelectorAll('video').length,
+      },
+      isTop: window.top === window,
+      labelCount: labels.length,
+    });
+  }
+
+  /**
    * Mute and the head count, on their own change key.
    *
    * Not folded into report(): that one returns early unless the *call* state
@@ -152,7 +189,12 @@
 
     const key = `${muted}:${count}`;
     if (key === lastMic) return;
+    const first = lastMic === null;
     lastMic = key;
+
+    // Every change, and the first reading whatever it says. If the detectors
+    // never match, the first reading is the whole story and it is still here.
+    diagnose(first ? 'first reading' : `mic state changed to muted=${muted}, participants=${count}`);
 
     chrome.runtime
       .sendMessage({ type: 'mic-state', muted, participants: count, participantSource: source })
