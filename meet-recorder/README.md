@@ -192,8 +192,9 @@ live one and nothing ever stopped by itself.
 `data-in-call="true"` is set in **both** states. It is the obvious signal and
 it is wrong; a test pins that so nobody reaches for it again.
 
-To refresh, run this in the page console during a call, then again after
-leaving, and merge both into the fixture:
+Capture snippets, and what to redact before sharing them, are in
+[`test/fixtures/CAPTURE.md`](test/fixtures/CAPTURE.md). The short version — run
+this during a call, then again after leaving, and merge both into the fixture:
 
 ```js
 copy(JSON.stringify({
