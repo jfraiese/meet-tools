@@ -23,6 +23,16 @@ test('a call URL yields its code, whatever else is on the URL', () => {
   assert.equal(callCodeFromUrl('https://meet.google.com/ABC-DEFG-HIJ'), 'abc-defg-hij');
 });
 
+test('a call opened from Meet home sits under /meet/', () => {
+  assert.equal(
+    callCodeFromUrl('https://meet.google.com/meet/qkq-sdkf-xnf?authuser=1&pageId=none'),
+    'qkq-sdkf-xnf',
+  );
+  assert.equal(callCodeFromUrl('https://meet.google.com/meet/'), null);
+  assert.equal(callCodeFromUrl('https://meet.google.com/meet/landing'), null);
+  assert.equal(callCodeFromUrl('https://meet.google.com/lookup/abc-defg-hij'), null);
+});
+
 test('everything that is not a call is not a call', () => {
   assert.equal(callCodeFromUrl('https://meet.google.com/'), null);
   assert.equal(callCodeFromUrl('https://meet.google.com/landing'), null);

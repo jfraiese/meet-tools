@@ -21,7 +21,11 @@ export function callCodeFromUrl(url) {
   }
   if (parsed.protocol !== 'https:') return null;
   if (parsed.hostname !== 'meet.google.com') return null;
-  const first = parsed.pathname.split('/').filter(Boolean)[0];
+  const segments = parsed.pathname.split('/').filter(Boolean);
+  // A call joined from Meet's home page lands on /meet/<code> rather than
+  // /<code>, with nothing else to tell the two apart.
+  if (segments[0] === 'meet') segments.shift();
+  const first = segments[0];
   if (!first) return null;
   const code = first.toLowerCase();
   return CALL_CODE.test(code) ? code : null;
