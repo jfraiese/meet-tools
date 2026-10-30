@@ -312,31 +312,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     }
 
     if (msg?.type === 'levels') {
-      const rec = await readState();
-      const { levels: previous } = await chrome.storage.session.get('levels');
       await chrome.storage.session.set({ levels: { mic: msg.mic, tab: msg.tab } });
-
-      const nameOf = (l) =>
-        l.mic === 'silent' ? 'Your microphone' : l.tab === 'silent' ? 'The meeting audio' : null;
-      const dead = nameOf(msg);
-      const wasDead = previous ? nameOf(previous) : null;
-
-      // Edge-triggered, and in both directions. This fired on every sample
-      // while a side was quiet and nothing ever sent the banner back to
-      // 'recording', so the first time a colleague talked for 30 seconds the
-      // bar went amber and stayed amber for the rest of the call.
-      if (rec.state === RECORDING && dead !== wasDead) {
-        await tellTab(
-          rec.tabId,
-          dead
-            ? {
-                type: 'recording-state',
-                state: 'warn',
-                note: `${dead} has been quiet for 30s — fine if nobody is talking, worth a look if not`,
-              }
-            : { type: 'recording-state', state: 'recording' },
-        );
-      }
+      // Recorded, not announced. A banner used to go amber after 30 s of quiet
+      // on either side, and in a real meeting one side is quiet most of the
+      // time — it was up so often it said nothing. The popup's meters are the
+      // place to check a source.
       sendResponse({ ok: true });
       return;
     }

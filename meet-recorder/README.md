@@ -42,8 +42,9 @@ none of those. A button there was tried and removed: it failed on exactly the
 press people actually make, the first one, and an affordance that usually
 refuses is worse than no affordance.
 
-The ✕ dismisses the banner for that call. It stays dismissed — including
-through silence warnings — until you start or stop a recording.
+The banner sits in Meet's top bar, left of the participant count. The ✕
+dismisses it for that call, and it stays dismissed until you start or stop a
+recording.
 
 Recording stops — and saves — when you leave the call, close the tab, press the
 shortcut again, or hit **Stop and save** in the popup or the banner. The banner
@@ -173,10 +174,9 @@ Run against a real two-participant call after any change to `content.js`,
       drops a source still produces a file that plays.
 - [ ] Leaving the call saves two files with no further action.
 - [ ] Closing the tab mid-call saves a file with `stopReason: "tab-closed"`.
-- [ ] Muting yourself for 30 s while they talk turns the banner amber, and it
-      turns back once you speak again.
-- [ ] Dismissing that amber banner with ✕ keeps it dismissed — going quiet
-      again does not bring it back.
+- [ ] The banner sits in the top bar, left of the participant count, and
+      covers no one's face — also with the side panel open.
+- [ ] Muting yourself for minutes while they talk changes nothing in the page.
 - [ ] The popup, mid-call: the clock counts up, and both meters move when the
       matching person talks. Mute yourself and **You** falls to empty while
       **Them** keeps moving.

@@ -39,23 +39,25 @@
     shadow.innerHTML = `
       <style>
         .bar {
-          position: fixed; z-index: 2147483647; left: 50%; transform: translateX(-50%);
-          bottom: 6.5rem; display: flex; gap: .75rem; align-items: center;
-          font: 500 13px/1 system-ui, sans-serif; color: #fff;
+          position: fixed; z-index: 2147483647; top: 24px; right: 16px;
+          transform: translateY(-50%); max-width: 45vw;
+          display: flex; gap: .5rem; align-items: center;
+          font: 500 12px/1 system-ui, sans-serif; color: #fff;
           background: #202124; border: 1px solid #5f6368; border-radius: 2rem;
-          padding: .7rem 1rem; box-shadow: 0 2px 12px rgba(0,0,0,.4);
+          padding: .35rem .5rem .35rem .75rem; box-shadow: 0 1px 6px rgba(0,0,0,.35);
         }
+        .msg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .bar[data-state="recording"] { background: #8c1d18; border-color: #f2b8b5; }
         .bar[data-state="warn"] { background: #614a19; border-color: #f9d26a; }
         .bar[data-state="saved"] { background: #0d652d; border-color: #81c995; }
         .bar[data-state="saved"] .dot { display: none; }
-        .dot { width: .55rem; height: .55rem; border-radius: 50%; background: #f28b82; }
+        .dot { flex: none; width: .5rem; height: .5rem; border-radius: 50%; background: #f28b82; }
         .bar[data-state="idle"] .dot { display: none; }
-        button { all: unset; cursor: pointer; opacity: .7; padding: 0 .2rem; }
+        button { all: unset; flex: none; cursor: pointer; opacity: .7; padding: 0 .2rem; }
         button:hover { opacity: 1; }
         .act {
           opacity: 1; border: 1px solid currentColor; border-radius: 1rem;
-          padding: .3rem .7rem; font-weight: 600;
+          padding: .25rem .6rem; font-weight: 600; white-space: nowrap;
         }
         .act:hover { background: rgba(255,255,255,.14); }
         .act[hidden] { display: none; }
@@ -76,6 +78,28 @@
       hideBanner();
     });
     document.documentElement.append(host);
+    addEventListener('resize', placeBanner);
+  }
+
+  // Up in Meet's top bar, just left of the controls at its right end — the
+  // organisation badge, the participant count. It used to float above the
+  // toolbar, over the bottom row of faces. Measured rather than hard-coded
+  // because how many controls sit up there changes from call to call; when
+  // none can be found it keeps the CSS default, the top-right corner.
+  function placeBanner() {
+    if (!host || host.style.display === 'none') return;
+    const bar = shadow.querySelector('.bar');
+    const top = [...document.querySelectorAll('button, [role="button"]')]
+      .map((e) => e.getBoundingClientRect())
+      .filter((r) => r.width > 0 && r.top >= 0 && r.bottom <= 64 && r.left > innerWidth / 2);
+    if (!top.length) {
+      bar.style.right = bar.style.top = '';
+      return;
+    }
+    const left = Math.min(...top.map((r) => r.left));
+    const middle = top.reduce((sum, r) => sum + (r.top + r.bottom) / 2, 0) / top.length;
+    bar.style.right = `${Math.round(innerWidth - left + 8)}px`;
+    bar.style.top = `${Math.round(middle)}px`;
   }
 
   // Dismissing is a real preference, not a repaint. The ✕ used to be undone by
@@ -96,12 +120,15 @@
 
     ensureBanner();
     shadow.querySelector('.bar').dataset.state = state;
-    shadow.querySelector('.msg').textContent = message;
+    const msg = shadow.querySelector('.msg');
+    msg.textContent = message;
+    msg.title = message; // the bar is narrow; the full text is a hover away
     const act = shadow.querySelector('.act');
     act.dataset.action = action ?? '';
     act.textContent = actionLabel;
     act.hidden = !action;
     host.style.display = '';
+    placeBanner();
   }
 
   function hideBanner() {
@@ -236,6 +263,7 @@
     debounce = setTimeout(() => {
       report();
       reportMic();
+      placeBanner();
     }, 400);
   });
   // attributes too: muting changes an aria-label on a button that is already
