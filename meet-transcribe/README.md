@@ -90,6 +90,50 @@ Portuguese recording needs no reinstall.
 
 `--no-prompt` suppresses the speaker-count dialog, for scripting.
 
+### By itself
+
+`auto.js` transcribes whatever new recordings appear in
+`~/Downloads/meet-recordings`, each one once. It passes the recorder's sidecar
+`participants` as `--speakers`, and when the sidecar has no number it shows the
+usual dialog. Notifications are the same as from Finder. It is meant to be
+started by a LaunchAgent that watches the folder:
+
+```xml
+<!-- ~/Library/LaunchAgents/com.meet-tools.auto-transcribe.plist -->
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.meet-tools.auto-transcribe</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/node</string>
+    <string>/Users/YOU/meet-tools/meet-transcribe/auto.js</string>
+    <string>--language</string><string>es</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict><key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string></dict>
+  <key>WatchPaths</key><array><string>/Users/YOU/Downloads/meet-recordings</string></array>
+  <key>RunAtLoad</key><true/>
+  <key>StandardOutPath</key><string>/Users/YOU/Library/Logs/meet-tools-auto-transcribe.log</string>
+  <key>StandardErrorPath</key><string>/Users/YOU/Library/Logs/meet-tools-auto-transcribe.log</string>
+</dict>
+</plist>
+```
+
+```bash
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.meet-tools.auto-transcribe.plist
+launchctl bootout   gui/$(id -u)/com.meet-tools.auto-transcribe   # to stop it
+```
+
+- New recordings only. Whatever was in the folder when it first ran stays
+  untouched (`since` in
+  `~/Library/Application Support/meet-tools/auto-transcribe.json`).
+- One attempt per file. One that fails or is too quiet is not retried. Use
+  the Quick Action, or `transcribe.js --force`.
+- A launchd job running node can read and write `~/Downloads` without a
+  privacy prompt. That was checked, not assumed.
+
 ### What it accepts
 
 Anything ffmpeg can decode — `.m4a`, `.mp3`, `.wav`, `.aiff`, `.mov`, `.mp4`,
