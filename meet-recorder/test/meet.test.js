@@ -148,6 +148,20 @@ test('participants are counted from tiles, with the source recorded', () => {
   assert.match(source, /More options/);
 });
 
+test('participant ids are counted once each, whatever the locale', () => {
+  const el = (id) => ({ getAttribute: () => id });
+  const root = {
+    querySelectorAll: (s) =>
+      s === '[data-participant-id]' ? [el('a'), el('a'), el('b'), el('c'), el('')] : [1, 2, 3, 4, 5, 6],
+  };
+  assert.deepEqual(countParticipants(root), { count: 3, source: '[data-participant-id]' });
+});
+
+test('a Spanish Meet is counted from its own tile label', () => {
+  const root = { querySelectorAll: (s) => (s === '[aria-label^="Más opciones para "]' ? [1, 2] : []) };
+  assert.equal(countParticipants(root).count, 2);
+});
+
 test('no recognisable tiles means no number, not zero', () => {
   // Zero people is impossible in a call you are in, so reporting it would be a
   // lie that reads as data. Null says "did not find out".

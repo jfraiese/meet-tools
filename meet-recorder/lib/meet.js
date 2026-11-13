@@ -132,10 +132,30 @@ export function detectMuted(root) {
  */
 export const PARTICIPANT_TILE_SELECTORS = [
   '[aria-label^="More options for "]',
+  '[aria-label^="Más opciones para "]',
   '[aria-label^="Más opciones de "]',
 ];
 
+/**
+ * Tiles also carry the participant's id, which no locale changes. Tried first
+ * because the labels above are a guess outside English: every Spanish-UI
+ * recording from October on came out `participants: null` while the English
+ * ones counted, so the Spanish label was never the one Meet uses. One person can
+ * own several elements with the same id, hence distinct values, not elements.
+ */
+export const PARTICIPANT_ID_ATTR = 'data-participant-id';
+
 export function countParticipants(root) {
+  try {
+    const ids = new Set(
+      [...root.querySelectorAll(`[${PARTICIPANT_ID_ATTR}]`)]
+        .map((e) => e?.getAttribute?.(PARTICIPANT_ID_ATTR))
+        .filter(Boolean),
+    );
+    if (ids.size > 0) return { count: ids.size, source: `[${PARTICIPANT_ID_ATTR}]` };
+  } catch {
+    // Fall through to the labels.
+  }
   for (const selector of PARTICIPANT_TILE_SELECTORS) {
     try {
       const found = root.querySelectorAll(selector).length;
