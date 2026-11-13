@@ -111,6 +111,16 @@
   }
   .hint[hidden] { display: none; }
 
+  /* The auto-record switch. A preference, not an action, so it sits below the
+     button in the soft ink rather than competing with it. */
+  .auto {
+    display: flex; align-items: center; gap: .45rem; margin-top: .8rem;
+    font-size: 11.5px; color: var(--ink-soft); cursor: pointer;
+  }
+  .auto input { accent-color: var(--rec); margin: 0; }
+  .auto[hidden], .auto-note[hidden] { display: none; }
+  .auto-note { margin-top: .3rem; font-size: 11px; color: var(--rec); }
+
   .rule { border: 0; border-top: 1px solid var(--edge); margin: .9rem 0 .7rem; }
   #recovery[hidden] { display: none; }
   #recovery-note { font-size: 11.5px; color: var(--ink-soft); }
@@ -132,6 +142,11 @@
 
   <button id="toggle" disabled>—</button>
   <div class="hint" id="hint" hidden></div>
+
+  <label class="auto" id="auto-row" hidden>
+    <input type="checkbox" id="auto"> Record by itself when a call starts
+  </label>
+  <div class="auto-note" id="auto-note" hidden></div>
 
   <div id="recovery" hidden>
     <hr class="rule">

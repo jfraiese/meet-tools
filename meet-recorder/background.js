@@ -2,13 +2,16 @@
 //
 // Two things here are not free choices. The stream id must be obtained in a
 // handler Chrome considers user-invoked — a `commands` shortcut or an action
-// click — and it must be obtained for a specific tab. And the service worker
-// is killed at Chrome's discretion, so live state is mirrored into
+// click — and it must be obtained for a specific tab. The one exception is a
+// Chrome launched with --allowlisted-extension-id naming this extension, which
+// is what lets a call start a recording by itself (see lib/auto.js). And the
+// service worker is killed at Chrome's discretion, so live state is mirrored into
 // chrome.storage.session; a worker that comes back mid-recording must not
 // believe it is idle.
 
 import { next, IDLE, RECORDING } from './lib/state.js';
 import { isCallUrl, callCodeFromUrl } from './lib/meet.js';
+import { shouldAutoStart, callKey, forgetTab } from './lib/auto.js';
 import { countChunks } from './db.js';
 
 const OFFSCREEN_PATH = 'offscreen.html';
@@ -62,6 +65,53 @@ async function reconcile() {
     return healed;
   }
   return rec;
+}
+
+// Calls already recorded (or deliberately stopped) in a tab, so auto-start
+// fires once per call rather than every time the page re-reports it.
+async function markHandled(tabId, callCode) {
+  if (tabId == null || !callCode) return;
+  const { handled = [] } = await chrome.storage.session.get('handled');
+  const key = callKey(tabId, callCode);
+  if (!handled.includes(key)) await chrome.storage.session.set({ handled: [...handled, key] });
+}
+
+async function forgetHandled(tabId) {
+  const { handled = [] } = await chrome.storage.session.get('handled');
+  const kept = forgetTab(handled, tabId);
+  if (kept.length !== handled.length) await chrome.storage.session.set({ handled: kept });
+}
+
+/**
+ * Start recording because the page says a call began — no gesture involved.
+ *
+ * Serialized: two reports racing through here would both read "idle", and the
+ * second toggle would land on a recording the first just started and stop it.
+ */
+let autoQueue = Promise.resolve();
+function maybeAutoStart(tabId, msg) {
+  autoQueue = autoQueue
+    .then(async () => {
+      // reconcile, not readState: a stale 'recording' left by a dead document
+      // would otherwise read as busy and skip the call for good.
+      const rec = await reconcile();
+      const { autoRecord } = await chrome.storage.local.get('autoRecord');
+      const { handled = [] } = await chrome.storage.session.get('handled');
+      const go = shouldAutoStart({
+        enabled: autoRecord,
+        idle: rec.state === IDLE,
+        inCall: msg.inCall,
+        matchedBy: msg.matchedBy,
+        callCode: msg.callCode,
+        tabId,
+        handled,
+      });
+      if (!go) return;
+      await markHandled(tabId, msg.callCode);
+      await dispatch('toggle', { tabId, callCode: msg.callCode, auto: true });
+    })
+    .catch(() => {});
+  return autoQueue;
 }
 
 async function tellTab(tabId, message) {
@@ -184,19 +234,28 @@ async function startCapture(rec) {
   let streamId;
   try {
     streamId = await chrome.tabCapture.getMediaStreamId({ targetTabId: rec.tabId });
+    if (rec.auto) await chrome.storage.local.set({ autoGrant: 'ok' });
   } catch (err) {
     // Chrome grants tab capture only to a tab the extension itself has been
     // invoked on — the commands shortcut, a toolbar click, a context menu.
     // Both routes that reach here qualify, so this should not fire; it stays
     // because "should not" is not "cannot", and a capture that fails silently
     // is the failure this whole tool exists to avoid.
+    //
+    // An automatic start is the exception: it has no gesture behind it, so it
+    // fails exactly like this whenever Chrome was not opened by the launcher
+    // that passes --allowlisted-extension-id. Expected, and said as such.
     const needsInvoking = /invoke|activeTab/i.test(err.message);
+    if (rec.auto && needsInvoking) await chrome.storage.local.set({ autoGrant: 'refused' });
     await tellTab(rec.tabId, {
       type: 'recording-state',
       state: 'idle',
-      note: needsInvoking
-        ? 'Chrome would not grant this tab to the extension. Click the toolbar icon, then Start recording.'
-        : `Could not capture this tab: ${err.message}`,
+      note:
+        rec.auto && needsInvoking
+          ? 'Not recording — Chrome wasn’t opened with the auto-record launcher. Press ⌘⇧U.'
+          : needsInvoking
+            ? 'Chrome would not grant this tab to the extension. Click the toolbar icon, then Start recording.'
+            : `Could not capture this tab: ${err.message}`,
     });
     await dispatch('error');
     return;
@@ -265,7 +324,8 @@ chrome.commands.onCommand.addListener(async (command, tab) => {
       setTimeout(() => chrome.action.setBadgeText({ text: '' }), 1200);
       return;
     }
-    await dispatch('toggle', { tabId: tab.id, callCode: callCodeFromUrl(tab.url) });
+    await markHandled(tab.id, callCodeFromUrl(tab.url));
+    await dispatch('toggle', { tabId: tab.id, callCode: callCodeFromUrl(tab.url), auto: false });
   } else {
     await dispatch('toggle', { stopReason: 'manual' });
   }
@@ -278,7 +338,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       if (!msg.inCall && rec.state !== IDLE && rec.tabId === sender.tab?.id) {
         await dispatch('call-ended', { stopReason: 'call-ended' });
       }
+      if (!msg.inCall && sender.tab) await forgetHandled(sender.tab.id);
+      // Answer first: starting takes a moment, and the page is not waiting on it.
       sendResponse({ ok: true });
+      if (msg.inCall && sender.tab) await maybeAutoStart(sender.tab.id, msg);
       return;
     }
 
@@ -287,7 +350,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       await tellTab(rec.tabId, {
         type: 'recording-state',
         state: 'recording',
-        note: 'Recording this meeting',
+        // Started by itself, so nobody in the room was told by the act of
+        // pressing anything. Say it where you will see it.
+        note: rec.auto ? 'Recording automatically — tell the room' : 'Recording this meeting',
       });
       sendResponse({ ok: true });
       return;
@@ -405,7 +470,8 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     if (msg?.type === 'popup-toggle') {
       const rec = await reconcile();
       if (rec.state === IDLE) {
-        await dispatch('toggle', { tabId: msg.tabId, callCode: msg.callCode ?? null });
+        await markHandled(msg.tabId, msg.callCode);
+        await dispatch('toggle', { tabId: msg.tabId, callCode: msg.callCode ?? null, auto: false });
       } else {
         await dispatch('toggle', { stopReason: 'manual' });
       }
@@ -419,6 +485,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 });
 
 chrome.tabs.onRemoved.addListener(async (tabId) => {
+  await forgetHandled(tabId);
   const rec = await readState();
   if (rec.tabId === tabId && rec.state !== IDLE) {
     await dispatch('tab-closed', { stopReason: 'tab-closed' });

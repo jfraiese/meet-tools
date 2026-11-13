@@ -184,6 +184,30 @@ if (!micGranted) {
 
 addEventListener('unload', () => clearInterval(poll));
 
+// Auto-record. Unset means on. Whether it can actually work is not something
+// the extension can ask Chrome — the launcher flag is invisible from here — so
+// the note reports what the last automatic attempt ran into instead.
+if (micGranted) {
+  const autoRow = document.getElementById('auto-row');
+  const autoBox = document.getElementById('auto');
+  const autoNote = document.getElementById('auto-note');
+  const { autoRecord, autoGrant } = await chrome.storage.local.get(['autoRecord', 'autoGrant']);
+  const paintAuto = () => {
+    const refused = autoBox.checked && autoGrant === 'refused';
+    autoNote.hidden = !refused;
+    autoNote.textContent = refused
+      ? 'Last call didn’t start by itself: open Chrome with the auto-record launcher.'
+      : '';
+  };
+  autoBox.checked = autoRecord !== false;
+  autoRow.hidden = false;
+  paintAuto();
+  autoBox.addEventListener('change', async () => {
+    await chrome.storage.local.set({ autoRecord: autoBox.checked });
+    paintAuto();
+  });
+}
+
 // Stored chunks mean a recording that never reached disk. The worker tries to
 // save these by itself on startup, so this is the fallback for when that failed
 // too — not the normal way recordings arrive.

@@ -42,6 +42,44 @@ none of those. A button there was tried and removed: it failed on exactly the
 press people actually make, the first one, and an affordance that usually
 refuses is worse than no affordance.
 
+### Recording by itself
+
+Chrome can let this extension capture a tab nobody invoked it on, but only
+when Chrome itself was started with
+`--allowlisted-extension-id=<this extension's id>` (checked in Chromium's
+`tab_capture_api.cc`). The launcher in `launcher/` does that:
+
+```bash
+meet-recorder/launcher/build.sh            # ~/Applications/Chrome (auto-record).app
+meet-recorder/launcher/build.sh "My name"  # ... or call it something else
+```
+
+Put it in the Dock in place of Chrome. Opened that way, joining a call starts
+a recording and the banner turns red: **Recording automatically — tell the
+room**.
+
+- Only once per call. Stop it by hand and it stays stopped; leave and rejoin
+  and it records again.
+- Only on a positive in-call reading, never on the URL alone, which is also
+  what the green room looks like.
+- Chrome opened any other way has no flag. The attempt fails, the banner says
+  so in amber, and the shortcut works as before. If Chrome is already running
+  without the flag, the launcher offers to restart it, restoring your tabs with
+  `--restore-last-session`.
+- The popup has the switch, **Record by itself when a call starts**. It is on
+  by default, and the popup also says when the last automatic start was
+  refused.
+
+**What the flag costs.** It does more than allow tab capture: Chrome treats
+the extension as allowlisted for its restricted extension APIs. This one
+declares none of them, so today it gains nothing else. But anything that can
+write to this folder could change that, so keep the checkout yours. Chrome also
+counts it as an unsupported flag and shows a yellow warning bar at every
+start, which the ✕ dismisses.
+
+The id comes from the folder's absolute path, because the extension is loaded
+unpacked. Move the checkout and the launcher has to be rebuilt.
+
 The banner sits in Meet's top bar, left of the participant count. The ✕
 dismisses it for that call, and it stays dismissed until you start or stop a
 recording.
@@ -196,6 +234,13 @@ Run against a real two-participant call after any change to `content.js`,
       began before you pressed record.
 - [ ] Say something while muted, then check the transcript does not contain it.
 - [ ] The sidecar's `participants` matches the number of people actually there.
+- [ ] Opened from the launcher: joining a call starts recording by itself,
+      with the red **Recording automatically** banner — and the green room
+      before joining does not.
+- [ ] Stop & save mid-call, wait for the green banner to go: it does not
+      start again. Leave and rejoin: it does.
+- [ ] Opened without the launcher: joining shows the amber note, ⌘⇧U still
+      records, and the popup says the last automatic start was refused.
 - [ ] `killall -9 "Google Chrome"` mid-recording, then reopening, offers
       **Save it now**, and the recovered file plays.
 
