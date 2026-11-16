@@ -241,6 +241,9 @@ Run against a real two-participant call after any change to `content.js`,
       start again. Leave and rejoin: it does.
 - [ ] Opened without the launcher: joining shows the amber note, ⌘⇧U still
       records, and the popup says the last automatic start was refused.
+- [ ] Microphone permission revoked (Chrome does it to unused origins: reset
+      it in the extension's site settings to reproduce): starting opens the
+      setup tab, the banner says why, and the popup offers **Finish setup**.
 - [ ] `killall -9 "Google Chrome"` mid-recording, then reopening, offers
       **Save it now**, and the recovered file plays.
 

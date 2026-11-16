@@ -98,11 +98,27 @@ async function start({ streamId, meta }) {
     tabStream = await navigator.mediaDevices.getUserMedia({
       audio: { mandatory: { chromeMediaSource: 'tab', chromeMediaSourceId: streamId } },
     });
-    micStream = await navigator.mediaDevices.getUserMedia({
-      // Echo cancellation matters when the call is on speakers: without it the
-      // microphone re-records the other participants a few milliseconds late.
-      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-    });
+    try {
+      micStream = await navigator.mediaDevices.getUserMedia({
+        // Echo cancellation matters when the call is on speakers: without it the
+        // microphone re-records the other participants a few milliseconds late.
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      });
+    } catch (err) {
+      // Named apart from every other failure, because it has a different fix.
+      // Chrome takes the microphone back from origins it thinks are unused,
+      // and an extension origin counts as visited only when one of its pages
+      // is open in a tab. Recording from this offscreen document does not
+      // count, so a grant made once in setup.html disappears about two months
+      // later. It comes back as "Permission dismissed", because no prompt can
+      // be shown here. The fix is the setup page again, so it gets its own name.
+      if (err?.name === 'NotAllowedError') {
+        const denied = new Error('Chrome removed the microphone permission');
+        denied.name = 'MicDenied';
+        throw denied;
+      }
+      throw err;
+    }
     ctx = new AudioContext();
   } catch (err) {
     for (const stream of [tabStream, micStream]) {

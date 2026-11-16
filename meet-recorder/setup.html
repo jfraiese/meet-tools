@@ -9,11 +9,17 @@
   .ok { background: #e6f4ea !important; }
   .bad { background: #fce8e6 !important; }
 </style>
-<h1>One-time setup</h1>
+<h1>Microphone access</h1>
 <p>
   Meet Recorder needs microphone access to record your side of a call. Chrome
   only allows that permission to be asked for from a real tab, which is why
-  this page exists — it runs once.
+  this page exists.
+</p>
+<p>
+  If you have seen this page before: Chrome removes permissions from sites it
+  thinks you no longer use, and recording in the background does not count as
+  using it. So the grant runs out after a couple of months, and this brings it
+  back.
 </p>
 <p><button id="grant">Grant microphone access</button></p>
 <div id="status">Not granted yet.</div>

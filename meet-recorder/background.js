@@ -366,10 +366,20 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
     if (msg?.type === 'error') {
       const rec = await readState();
+      // The microphone grant expired (see offscreen.js). Opening setup.html is
+      // the whole fix, so open it instead of describing it. Clearing micGranted
+      // also makes the popup offer setup until it is done.
+      const micDenied = msg.name === 'MicDenied';
+      if (micDenied) {
+        await chrome.storage.local.set({ micGranted: false });
+        await chrome.tabs.create({ url: chrome.runtime.getURL('setup.html') });
+      }
       await tellTab(rec.tabId, {
         type: 'recording-state',
         state: 'idle',
-        note: `Recording failed: ${msg.message}`,
+        note: micDenied
+          ? 'Not recording — Chrome removed the microphone permission. Allow it in the tab that just opened, then start again.'
+          : `Recording failed: ${msg.message}`,
       });
       await dispatch('error');
       sendResponse({ ok: true });
