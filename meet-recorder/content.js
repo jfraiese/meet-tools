@@ -148,11 +148,7 @@
     // banner may then appear a touch early, which beats never appearing.
     const active = Boolean(callCode) && !ended && (inCall || matchedBy === null);
 
-    // inCall is in the key, not just active: a call assumed from the URL and
-    // the same call positively recognised look identical by `active`, and only
-    // the second may start a recording by itself — so the change between them
-    // has to be sent.
-    const key = `${active}:${inCall}:${callCode}`;
+    const key = `${active}:${callCode}`;
     if (key === lastSent) return;
     lastSent = key;
 
